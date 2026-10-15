@@ -1,6 +1,6 @@
 /*
  * =====================================================================================
- *  AI SMART BIN — ARDUINO MICROCONTROLLER FIRMWARE
+ *  AI SMART BIN — ARDUINO MICROCONTROLLER FIRMWARE (8-STEP HALF-STEPPING)
  *  Project: Smart School Waste Sorting Station with AI (YOLOv8)
  * =====================================================================================
  * 
@@ -46,37 +46,40 @@ const int EEPROM_OFFSET_ADDR = 2;   // 2 bytes for int offset
 // =====================================================================================
 // PIN CONFIGURATION & PARAMETERS
 // =====================================================================================
-const int LED_PIN = 13;          // Built-in activity LED
 
 #ifdef MODE_FUNDUINO_THREE_STEPPERS
   // Motor indices:
   const int MOTOR_PLATFORM = 0; // Winch thread motor on table (Pins 8, 10, 9, 11)
-  const int MOTOR_LEFT     = 1; // Left sorter flap (Pins 12, 13, 14, 15)
-  const int MOTOR_RIGHT    = 2; // Right sorter flap (Pins 16, 17, 18, 19)
+  const int MOTOR_LEFT     = 1; // Left sorter flap (Pins 12, 14, 13, 15)
+  const int MOTOR_RIGHT    = 2; // Right sorter flap (Pins 16, 18, 17, 19)
 
-  // 4-Phase Stepper Drive Matrix:
-  const byte phases[4][4] = {
+  // 8-Phase Half-Stepping Drive Matrix for 28BYJ-48 (Maximum torque, zero stall in reverse):
+  const byte phases[8][4] = {
+    {1, 0, 0, 0},
     {1, 1, 0, 0},
+    {0, 1, 0, 0},
     {0, 1, 1, 0},
+    {0, 0, 1, 0},
     {0, 0, 1, 1},
+    {0, 0, 0, 1},
     {1, 0, 0, 1}
   };
 
-  // Funduino Mega Stepper Pinout (ULN2003 Drivers):
+  // Funduino Mega Stepper Pinout with IN1, IN3, IN2, IN4 coil order:
   const int stepperPins[3][4] = {
-    {8, 10, 9, 11},    // Motor 0: Table Platform Winch
-    {12, 13, 14, 15},  // Motor 1: Left Sorter Flap (Paper)
-    {16, 17, 18, 19}   // Motor 2: Right Sorter Flap (Bio)
+    {8, 10, 9, 11},    // Motor 0: Table Platform Winch (IN1=8, IN3=10, IN2=9, IN4=11)
+    {12, 14, 13, 15},  // Motor 1: Left Sorter Flap     (IN1=12, IN3=14, IN2=13, IN4=15)
+    {16, 18, 17, 19}   // Motor 2: Right Sorter Flap    (IN1=16, IN3=18, IN2=17, IN4=19)
   };
 
   // Compartment Indicator LEDs:
   // Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Bio / Organic)
   const int ledPins[3] = {5, 6, 7};
 
-  const int STEPS_FLAP_TILT     = 380;   // ~67 degrees tilt for sorter flaps (60-75 deg range)
-  const int STEPS_PLATFORM_LIFT = 512;   // Thread winding steps to lift inspection platform
-  const int CALIBRATION_STEPS   = 64;    // ~11.25 degrees per calibration nudge click
-  const int STEP_DELAY_MS       = 3;     // 3 ms per step (high torque & smooth)
+  const int STEPS_FLAP_TILT     = 760;   // ~67 degrees tilt for sorter flaps (60-75 deg range)
+  const int STEPS_PLATFORM_LIFT = 1024;  // Thread winding steps to lift inspection platform
+  const int CALIBRATION_STEPS   = 128;   // Steps per manual calibration nudge click (~11.2 deg)
+  const int STEP_DELAY_US       = 1200;  // 1200 microseconds per half-step (smooth & high torque)
   const int LID_HOLD_TIME_MS    = 1800;  // 1.8 seconds hold open
 #endif
 
@@ -200,11 +203,11 @@ void deenergizeStepper(int m) {
 void rotateStepper(int m, int steps, bool forward) {
   if (m < 0 || m >= 3) return;
   for (int s = 0; s < steps; s++) {
-    int p = forward ? (s % 4) : (3 - (s % 4));
+    int p = forward ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(stepperPins[m][i], phases[p][i]);
     }
-    delay(STEP_DELAY_MS);
+    delayMicroseconds(STEP_DELAY_US);
   }
   deenergizeStepper(m);
 }
@@ -212,13 +215,13 @@ void rotateStepper(int m, int steps, bool forward) {
 void rotateTwoSteppers(int m1, bool fwd1, int m2, bool fwd2, int steps) {
   if (m1 < 0 || m1 >= 3 || m2 < 0 || m2 >= 3) return;
   for (int s = 0; s < steps; s++) {
-    int p1 = fwd1 ? (s % 4) : (3 - (s % 4));
-    int p2 = fwd2 ? (s % 4) : (3 - (s % 4));
+    int p1 = fwd1 ? (s % 8) : (7 - (s % 8));
+    int p2 = fwd2 ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(stepperPins[m1][i], phases[p1][i]);
       digitalWrite(stepperPins[m2][i], phases[p2][i]);
     }
-    delay(STEP_DELAY_MS);
+    delayMicroseconds(STEP_DELAY_US);
   }
   deenergizeStepper(m1);
   deenergizeStepper(m2);
@@ -238,9 +241,6 @@ void nudgeStepper(int m, int steps, bool forward) {
 // =====================================================================================
 void setup() {
   Serial.begin(9600);
-
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
 
 #ifdef MODE_FUNDUINO_THREE_STEPPERS
   for (int m = 0; m < 3; m++) {
@@ -301,8 +301,6 @@ void loop() {
       return;
     }
 
-    digitalWrite(LED_PIN, HIGH);
-
     switch (cmd) {
       // Normal Sorting Commands
       case 'P':
@@ -358,8 +356,6 @@ void loop() {
       default:
         break;
     }
-
-    digitalWrite(LED_PIN, LOW);
 
     // CRITICAL: Send acknowledgement signal 'K' back to PC
     Serial.println('K');

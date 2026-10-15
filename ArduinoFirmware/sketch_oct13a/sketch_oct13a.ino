@@ -1,14 +1,14 @@
 /*
  * =====================================================================================
- *  FUNDUINO MEGA 2560 SMART WASTE BIN CONTROLLER
+ *  FUNDUINO MEGA 2560 SMART WASTE BIN CONTROLLER (8-STEP HALF-STEPPING)
  *  AI Smart Bin Project (YOLOv8 + WPF Desktop Application)
  * =====================================================================================
  * 
  *  HARDWARE SETUP (FUNDUINO / ARDUINO MEGA 2560):
- *  - 3 x 28BYJ-48 Stepper Motors with ULN2003 Drivers:
+ *  - 3 x 28BYJ-48 Stepper Motors with ULN2003 Drivers (IN1, IN3, IN2, IN4 mapping):
  *      Motor 0 (Platform Lift Winch): Pins 8, 10, 9, 11
- *      Motor 1 (Left Sorter Flap):    Pins 12, 13, 14, 15
- *      Motor 2 (Right Sorter Flap):   Pins 16, 17, 18, 19
+ *      Motor 1 (Left Sorter Flap):    Pins 12, 14, 13, 15  (Note: 14 & 13 swapped for correct coils!)
+ *      Motor 2 (Right Sorter Flap):   Pins 16, 18, 17, 19  (Note: 18 & 17 swapped for correct coils!)
  *  - 3 x Compartment Indicator LEDs:
  *      Pin 5: Red LED   (Plastic)
  *      Pin 6: Green LED (Paper)
@@ -32,32 +32,37 @@
 
 // Motor indices:
 const int MOTOR_PLATFORM = 0; // Winch thread motor on table (Pins 8, 10, 9, 11)
-const int MOTOR_LEFT     = 1; // Left sorter flap (Pins 12, 13, 14, 15)
-const int MOTOR_RIGHT    = 2; // Right sorter flap (Pins 16, 17, 18, 19)
+const int MOTOR_LEFT     = 1; // Left sorter flap (Pins 12, 14, 13, 15)
+const int MOTOR_RIGHT    = 2; // Right sorter flap (Pins 16, 18, 17, 19)
 
-// 4-Phase Stepper Drive Matrix:
-const byte phases[4][4] = {
+// 8-Phase Half-Stepping Drive Matrix for 28BYJ-48 (Maximum torque, zero stall in reverse):
+const byte phases[8][4] = {
+  {1, 0, 0, 0},
   {1, 1, 0, 0},
+  {0, 1, 0, 0},
   {0, 1, 1, 0},
+  {0, 0, 1, 0},
   {0, 0, 1, 1},
+  {0, 0, 0, 1},
   {1, 0, 0, 1}
 };
 
+// ULN2003 Driver Pin Mapping with IN1, IN3, IN2, IN4 internal coil order:
 const int pins[3][4] = {
   {8, 10, 9, 11},    // Motor 0: Table Platform Winch
-  {12, 13, 14, 15},  // Motor 1: Left Sorter Flap (Paper)
-  {16, 17, 18, 19}   // Motor 2: Right Sorter Flap (Bio)
+  {12, 14, 13, 15},  // Motor 1: Left Sorter Flap (Paper)
+  {16, 18, 17, 19}   // Motor 2: Right Sorter Flap (Bio)
 };
 
 // Indicator LEDs: Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Bio)
 const int ledPins[3] = {5, 6, 7};
 
-// Mechanical motion parameters:
-const int STEPS_FLAP_TILT     = 380;  // ~67 degrees tilt for sorter flaps (60-75 deg range)
-const int STEPS_PLATFORM_LIFT = 512;  // Thread winding steps to lift inspection platform
-const int CALIBRATION_STEPS   = 64;   // Steps per manual calibration nudge click (~11 deg)
-const int STEP_DELAY_MS       = 3;    // 3 ms per step (smooth & reliable torque)
-const int LID_HOLD_TIME_MS    = 1800; // Hold open duration for trash to fall through
+// Mechanical motion parameters (Half-step resolution: 4096 steps per 360 deg):
+const int STEPS_FLAP_TILT     = 760;   // ~67 degrees tilt for sorter flaps (60-75 deg range)
+const int STEPS_PLATFORM_LIFT = 1024;  // Thread winding steps to lift inspection platform
+const int CALIBRATION_STEPS   = 128;   // Steps per manual calibration nudge click (~11.2 deg)
+const int STEP_DELAY_US       = 1200;  // 1200 microseconds per half-step (smooth & high torque)
+const int LID_HOLD_TIME_MS    = 1800;  // Hold open duration for trash to fall through
 
 // Active calibration motor target: 0 = ALL, 1 = Platform, 2 = Left Flap, 3 = Right Flap
 byte activeCalibrationMotor = 0;
@@ -75,15 +80,15 @@ void deenergizeAll() {
   }
 }
 
-// Rotate a single stepper motor
+// Rotate a single stepper motor with 8-step half-stepping sequence
 void rotate(int m, int steps, bool forward) {
   if (m < 0 || m >= 3) return;
   for (int s = 0; s < steps; s++) {
-    int p = forward ? (s % 4) : (3 - (s % 4));
+    int p = forward ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(pins[m][i], phases[p][i]);
     }
-    delay(STEP_DELAY_MS);
+    delayMicroseconds(STEP_DELAY_US);
   }
   deenergizeMotor(m);
 }
@@ -92,13 +97,13 @@ void rotate(int m, int steps, bool forward) {
 void rotateTwo(int m1, bool fwd1, int m2, bool fwd2, int steps) {
   if (m1 < 0 || m1 >= 3 || m2 < 0 || m2 >= 3) return;
   for (int s = 0; s < steps; s++) {
-    int p1 = fwd1 ? (s % 4) : (3 - (s % 4));
-    int p2 = fwd2 ? (s % 4) : (3 - (s % 4));
+    int p1 = fwd1 ? (s % 8) : (7 - (s % 8));
+    int p2 = fwd2 ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(pins[m1][i], phases[p1][i]);
       digitalWrite(pins[m2][i], phases[p2][i]);
     }
-    delay(STEP_DELAY_MS);
+    delayMicroseconds(STEP_DELAY_US);
   }
   deenergizeMotor(m1);
   deenergizeMotor(m2);
