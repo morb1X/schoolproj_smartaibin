@@ -854,7 +854,7 @@ namespace SmartBinApp.ViewModels
                 if (sent)
                 {
                     StatusMessage = $"{SelectedMotorName}: step {dirName} ('{direction}')...";
-                    StartLidSafetyTimeout(3000);
+                    StartLidSafetyTimeout(5000);
                 }
                 else
                 {
@@ -891,7 +891,7 @@ namespace SmartBinApp.ViewModels
                 {
                     StatusMessage = $"{SelectedMotorName}: Home Zero set ('Z')";
                     AddLog($"[Calibration] {SelectedMotorName}: Zero set and saved to EEPROM!", LogLevel.Success);
-                    StartLidSafetyTimeout(3000);
+                    StartLidSafetyTimeout(5000);
                 }
                 else
                 {

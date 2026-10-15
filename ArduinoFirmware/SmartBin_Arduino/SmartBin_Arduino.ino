@@ -48,15 +48,14 @@ const int LED_PIN = 13;          // Built-in activity LED
   const int SERVO_PIN_PAPER   = 10;  // Paper lid servo
   const int SERVO_PIN_ORGANIC = 11;  // Organic lid servo
 
-  // Lid angles
-  const int BASE_ANGLE_CLOSED = 0;   // Base closed position (degrees)
-  const int ANGLE_OPENED = 95;       // Open position (degrees)
-  const int LID_HOLD_TIME_MS = 2500; // Hold open duration (2.5 sec)
+  // Calibrated resting (closed) angles saved in EEPROM (0 to 150 degrees)
+  int anglePlastic = 10;
+  int anglePaper   = 10;
+  int angleOrganic = 10;
 
-  // Calibrated offsets saved in EEPROM for each individual lid
-  int offsetPlastic = 0;
-  int offsetPaper = 0;
-  int offsetOrganic = 0;
+  const int CALIBRATION_SERVO_STEP = 5; // Degrees per manual calibration click
+  const int ANGLE_DELTA_OPEN = 85;      // Lid opening stroke (+85 degrees)
+  const int LID_HOLD_TIME_MS = 2500;    // Hold open duration (2.5 sec)
 
   Servo servoPlastic;
   Servo servoPaper;
@@ -71,7 +70,7 @@ const int LED_PIN = 13;          // Built-in activity LED
   const int STEPPER_IN4 = 11;
 
   const int STEPS_PER_CYCLE = 512;   // Steps count (~90 degrees)
-  const int CALIBRATION_STEPS = 32;  // Steps per manual nudge (~5.6 degrees)
+  const int CALIBRATION_STEPS = 64;  // Steps per manual nudge (~11.2 degrees)
   const int STEP_DELAY_US = 1500;    // Step delay in microseconds
   const int HOLD_TIME_MS = 2000;     // Pause duration
 
@@ -85,7 +84,7 @@ const int LED_PIN = 13;          // Built-in activity LED
   const int ANGLE_CHUTE_ORGANIC = 150;// Tilt right
   const int LID_HOLD_TIME_MS = 2500;
 
-  int chuteZeroOffset = 0;           // Calibrated center offset
+  int chuteZeroOffset = 0;           // Calibrated center offset (-50 to +50)
   Servo servoChute;
 #endif
 
@@ -98,16 +97,16 @@ byte activeCalibrationMotor = 0;
 void loadCalibration() {
   if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_VAL) {
     #ifdef MODE_THREE_SERVOS
-      EEPROM.get(2, offsetPlastic);
-      EEPROM.get(4, offsetPaper);
-      EEPROM.get(6, offsetOrganic);
-      offsetPlastic = constrain(offsetPlastic, -35, 35);
-      offsetPaper = constrain(offsetPaper, -35, 35);
-      offsetOrganic = constrain(offsetOrganic, -35, 35);
+      EEPROM.get(2, anglePlastic);
+      EEPROM.get(4, anglePaper);
+      EEPROM.get(6, angleOrganic);
+      anglePlastic = constrain(anglePlastic, 0, 150);
+      anglePaper   = constrain(anglePaper, 0, 150);
+      angleOrganic = constrain(angleOrganic, 0, 150);
     #endif
     #ifdef MODE_SINGLE_SERVO_CHUTE
       EEPROM.get(2, chuteZeroOffset);
-      chuteZeroOffset = constrain(chuteZeroOffset, -40, 40);
+      chuteZeroOffset = constrain(chuteZeroOffset, -50, 50);
     #endif
   }
 }
@@ -115,9 +114,9 @@ void loadCalibration() {
 void saveCalibration() {
   EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_VAL);
   #ifdef MODE_THREE_SERVOS
-    EEPROM.put(2, offsetPlastic);
-    EEPROM.put(4, offsetPaper);
-    EEPROM.put(6, offsetOrganic);
+    EEPROM.put(2, anglePlastic);
+    EEPROM.put(4, anglePaper);
+    EEPROM.put(6, angleOrganic);
   #endif
   #ifdef MODE_SINGLE_SERVO_CHUTE
     EEPROM.put(2, chuteZeroOffset);
@@ -126,9 +125,9 @@ void saveCalibration() {
 
 void applyZeroPosition() {
 #ifdef MODE_THREE_SERVOS
-  servoPlastic.write(constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45));
-  servoPaper.write(constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45));
-  servoOrganic.write(constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45));
+  servoPlastic.write(anglePlastic);
+  servoPaper.write(anglePaper);
+  servoOrganic.write(angleOrganic);
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
@@ -251,6 +250,7 @@ void loop() {
 
     // CRITICAL: Send acknowledgement signal 'K' back to PC
     Serial.println('K');
+    Serial.flush();
   }
 }
 
@@ -267,16 +267,16 @@ void handleNudgeLeft() {
 
 #ifdef MODE_THREE_SERVOS
   if (activeCalibrationMotor == 1 || activeCalibrationMotor == 0) {
-    offsetPlastic = constrain(offsetPlastic - 3, -35, 35);
-    servoPlastic.write(constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45));
+    anglePlastic = constrain(anglePlastic - CALIBRATION_SERVO_STEP, 0, 150);
+    servoPlastic.write(anglePlastic);
   }
   if (activeCalibrationMotor == 2 || activeCalibrationMotor == 0) {
-    offsetPaper = constrain(offsetPaper - 3, -35, 35);
-    servoPaper.write(constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45));
+    anglePaper = constrain(anglePaper - CALIBRATION_SERVO_STEP, 0, 150);
+    servoPaper.write(anglePaper);
   }
   if (activeCalibrationMotor == 3 || activeCalibrationMotor == 0) {
-    offsetOrganic = constrain(offsetOrganic - 3, -35, 35);
-    servoOrganic.write(constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45));
+    angleOrganic = constrain(angleOrganic - CALIBRATION_SERVO_STEP, 0, 150);
+    servoOrganic.write(angleOrganic);
   }
 #endif
 
@@ -295,16 +295,16 @@ void handleNudgeRight() {
 
 #ifdef MODE_THREE_SERVOS
   if (activeCalibrationMotor == 1 || activeCalibrationMotor == 0) {
-    offsetPlastic = constrain(offsetPlastic + 3, -35, 35);
-    servoPlastic.write(constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45));
+    anglePlastic = constrain(anglePlastic + CALIBRATION_SERVO_STEP, 0, 150);
+    servoPlastic.write(anglePlastic);
   }
   if (activeCalibrationMotor == 2 || activeCalibrationMotor == 0) {
-    offsetPaper = constrain(offsetPaper + 3, -35, 35);
-    servoPaper.write(constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45));
+    anglePaper = constrain(anglePaper + CALIBRATION_SERVO_STEP, 0, 150);
+    servoPaper.write(anglePaper);
   }
   if (activeCalibrationMotor == 3 || activeCalibrationMotor == 0) {
-    offsetOrganic = constrain(offsetOrganic + 3, -35, 35);
-    servoOrganic.write(constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45));
+    angleOrganic = constrain(angleOrganic + CALIBRATION_SERVO_STEP, 0, 150);
+    servoOrganic.write(angleOrganic);
   }
 #endif
 
@@ -338,10 +338,10 @@ void handleSetZero() {
 
 void handleWastePlastic() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45);
-  smoothMove(servoPlastic, closedAngle, ANGLE_OPENED, 15);
+  int openAngle = constrain(anglePlastic + ANGLE_DELTA_OPEN, 20, 180);
+  smoothMove(servoPlastic, anglePlastic, openAngle, 15);
   delay(LID_HOLD_TIME_MS);
-  smoothMove(servoPlastic, ANGLE_OPENED, closedAngle, 15);
+  smoothMove(servoPlastic, openAngle, anglePlastic, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
@@ -360,10 +360,10 @@ void handleWastePlastic() {
 
 void handleWastePaper() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45);
-  smoothMove(servoPaper, closedAngle, ANGLE_OPENED, 15);
+  int openAngle = constrain(anglePaper + ANGLE_DELTA_OPEN, 20, 180);
+  smoothMove(servoPaper, anglePaper, openAngle, 15);
   delay(LID_HOLD_TIME_MS);
-  smoothMove(servoPaper, ANGLE_OPENED, closedAngle, 15);
+  smoothMove(servoPaper, openAngle, anglePaper, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
@@ -382,10 +382,10 @@ void handleWastePaper() {
 
 void handleWasteOrganic() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45);
-  smoothMove(servoOrganic, closedAngle, ANGLE_OPENED, 15);
+  int openAngle = constrain(angleOrganic + ANGLE_DELTA_OPEN, 20, 180);
+  smoothMove(servoOrganic, angleOrganic, openAngle, 15);
   delay(LID_HOLD_TIME_MS);
-  smoothMove(servoOrganic, ANGLE_OPENED, closedAngle, 15);
+  smoothMove(servoOrganic, openAngle, angleOrganic, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
