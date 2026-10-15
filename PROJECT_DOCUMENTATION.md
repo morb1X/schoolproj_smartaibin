@@ -77,8 +77,12 @@ schoolproj_smartaibin/
 | `'P'` | **Plastic** | Open plastic compartment lid for 2.5–3 sec, then close |
 | `'B'` | **Paper** | Open paper compartment lid for 2.5–3 sec, then close |
 | `'O'` | **Organic** | Open organic/bio compartment lid for 2.5–3 sec, then close |
-| `'<'` / `'L'` | **Nudge Left / CCW** | Incrementally step/turn motor to the left |
-| `'>'` / `'R'` | **Nudge Right / CW** | Incrementally step/turn motor to the right |
+| `'0'` | **Target All Motors** | Select all motors for simultaneous calibration |
+| `'1'` | **Target Plastic (D9)** | Select Plastic lid motor for calibration |
+| `'2'` | **Target Paper (D10)** | Select Paper lid motor for calibration |
+| `'3'` | **Target Organic (D11)** | Select Organic lid motor for calibration |
+| `'<'` / `'L'` | **Nudge Left / CCW** | Incrementally step/turn selected motor to the left |
+| `'>'` / `'R'` | **Nudge Right / CW** | Incrementally step/turn selected motor to the right |
 | `'Z'` | **Set Home / Zero** | Save current position as Home / Zero in EEPROM |
 
 ### Responses (Arduino ➔ PC):

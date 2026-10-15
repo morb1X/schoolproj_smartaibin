@@ -170,8 +170,12 @@ Im Repository ist bereits ein vortrainiertes Modell [`SmartBinApp/best.onnx`](Sm
 | `'P'` | **Plastik** | Öffnet die Plastik-Klappe für ca. 2,5 Sek., schließt danach |
 | `'B'` | **Papier** | Öffnet die Papier-Klappe für ca. 2,5 Sek., schließt danach |
 | `'O'` | **Bioabfall** | Öffnet die Bio-Klappe für ca. 2,5 Sek., schließt danach |
-| `'<'` / `'L'` | **Schritt links / Gegenzeigersinn** | Bewegt Motor schrittweise nach links (32 Schritte Stepper, -3° Servo) |
-| `'>'` / `'R'` | **Schritt rechts / Uhrzeigersinn** | Bewegt Motor schrittweise nach rechts (32 Schritte Stepper, +3° Servo) |
+| `'0'` | **Ziel: Alle Motoren** | Wählt alle Motoren für gemeinsame Kalibrierung aus |
+| `'1'` | **Ziel: Plastik (D9)** | Wählt den Plastik-Klappenmotor zur Kalibrierung |
+| `'2'` | **Ziel: Papier (D10)** | Wählt den Papier-Klappenmotor zur Kalibrierung |
+| `'3'` | **Ziel: Bioabfall (D11)** | Wählt den Bio-Klappenmotor zur Kalibrierung |
+| `'<'` / `'L'` | **Schritt links / Gegenzeigersinn** | Bewegt gewählten Motor schrittweise nach links (32 Schritte Stepper, -3° Servo) |
+| `'>'` / `'R'` | **Schritt rechts / Uhrzeigersinn** | Bewegt gewählten Motor schrittweise nach rechts (32 Schritte Stepper, +3° Servo) |
 | `'Z'` | **Nullpunkt setzen** | Speichert aktuelle Position im Arduino-EEPROM als Referenz-Nullpunkt |
 
 ### Arduino ➔ PC:

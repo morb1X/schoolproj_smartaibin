@@ -114,6 +114,41 @@ namespace SmartBinApp.ViewModels
         public string BtnOrganic => _loc.Get("BtnOrganic");
         public string CalibrationTitle => _loc.Get("CalibrationTitle");
         public string CalibrationDesc => _loc.Get("CalibrationDesc");
+        public string CalibrationMotorAll => _loc.Get("CalibrationMotorAll");
+        public string CalibrationMotorPlastic => _loc.Get("CalibrationMotorPlastic");
+        public string CalibrationMotorPaper => _loc.Get("CalibrationMotorPaper");
+        public string CalibrationMotorOrganic => _loc.Get("CalibrationMotorOrganic");
+
+        private int _selectedCalibrationMotor = 0; // 0 = All, 1 = Plastic, 2 = Paper, 3 = Organic
+        public int SelectedCalibrationMotor
+        {
+            get => _selectedCalibrationMotor;
+            set
+            {
+                if (SetProperty(ref _selectedCalibrationMotor, value))
+                {
+                    OnPropertyChanged(nameof(IsMotorAllSelected));
+                    OnPropertyChanged(nameof(IsMotorPlasticSelected));
+                    OnPropertyChanged(nameof(IsMotorPaperSelected));
+                    OnPropertyChanged(nameof(IsMotorOrganicSelected));
+                    OnPropertyChanged(nameof(SelectedMotorName));
+                }
+            }
+        }
+
+        public bool IsMotorAllSelected => _selectedCalibrationMotor == 0;
+        public bool IsMotorPlasticSelected => _selectedCalibrationMotor == 1;
+        public bool IsMotorPaperSelected => _selectedCalibrationMotor == 2;
+        public bool IsMotorOrganicSelected => _selectedCalibrationMotor == 3;
+
+        public string SelectedMotorName => _selectedCalibrationMotor switch
+        {
+            1 => CalibrationMotorPlastic,
+            2 => CalibrationMotorPaper,
+            3 => CalibrationMotorOrganic,
+            _ => CalibrationMotorAll
+        };
+
         public string BtnNudgeLeft => _loc.Get("BtnNudgeLeft");
         public string BtnNudgeRight => _loc.Get("BtnNudgeRight");
         public string BtnSetZero => _loc.Get("BtnSetZero");
@@ -156,6 +191,11 @@ namespace SmartBinApp.ViewModels
             OnPropertyChanged(nameof(BtnOrganic));
             OnPropertyChanged(nameof(CalibrationTitle));
             OnPropertyChanged(nameof(CalibrationDesc));
+            OnPropertyChanged(nameof(CalibrationMotorAll));
+            OnPropertyChanged(nameof(CalibrationMotorPlastic));
+            OnPropertyChanged(nameof(CalibrationMotorPaper));
+            OnPropertyChanged(nameof(CalibrationMotorOrganic));
+            OnPropertyChanged(nameof(SelectedMotorName));
             OnPropertyChanged(nameof(BtnNudgeLeft));
             OnPropertyChanged(nameof(BtnNudgeRight));
             OnPropertyChanged(nameof(BtnSetZero));
@@ -425,6 +465,10 @@ namespace SmartBinApp.ViewModels
         public RelayCommand SimulatePlasticCommand { get; }
         public RelayCommand SimulatePaperCommand { get; }
         public RelayCommand SimulateOrganicCommand { get; }
+        public RelayCommand SelectMotorAllCommand { get; }
+        public RelayCommand SelectMotorPlasticCommand { get; }
+        public RelayCommand SelectMotorPaperCommand { get; }
+        public RelayCommand SelectMotorOrganicCommand { get; }
         public RelayCommand NudgeLeftCommand { get; }
         public RelayCommand NudgeRightCommand { get; }
         public RelayCommand SetZeroCommand { get; }
@@ -461,6 +505,11 @@ namespace SmartBinApp.ViewModels
             SimulatePlasticCommand = new RelayCommand(async () => await SendWasteCommandAsync('P', _loc.GetWasteShortName(WasteType.Plastic)), () => CanSendCommands);
             SimulatePaperCommand = new RelayCommand(async () => await SendWasteCommandAsync('B', _loc.GetWasteShortName(WasteType.Paper)), () => CanSendCommands);
             SimulateOrganicCommand = new RelayCommand(async () => await SendWasteCommandAsync('O', _loc.GetWasteShortName(WasteType.Organic)), () => CanSendCommands);
+
+            SelectMotorAllCommand = new RelayCommand(async () => await ExecuteSelectMotorAsync(0), () => !IsArduinoBusy);
+            SelectMotorPlasticCommand = new RelayCommand(async () => await ExecuteSelectMotorAsync(1), () => !IsArduinoBusy);
+            SelectMotorPaperCommand = new RelayCommand(async () => await ExecuteSelectMotorAsync(2), () => !IsArduinoBusy);
+            SelectMotorOrganicCommand = new RelayCommand(async () => await ExecuteSelectMotorAsync(3), () => !IsArduinoBusy);
 
             NudgeLeftCommand = new RelayCommand(async () => await ExecuteNudgeAsync('<'), () => CanSendCommands);
             NudgeRightCommand = new RelayCommand(async () => await ExecuteNudgeAsync('>'), () => CanSendCommands);
@@ -772,20 +821,39 @@ namespace SmartBinApp.ViewModels
             }, token);
         }
 
+        private async Task ExecuteSelectMotorAsync(int motorId)
+        {
+            if (IsArduinoBusy) return;
+            SelectedCalibrationMotor = motorId;
+            string motorName = SelectedMotorName;
+            AddLog($"[Calibration] Target motor selected: {motorName} ('{motorId}')", LogLevel.Info);
+
+            if (IsConnected)
+            {
+                char cmd = (char)('0' + motorId);
+                await _serialManager.SendCommandAsync(cmd);
+                StatusMessage = $"Selected motor: {motorName}";
+            }
+            else if (IsDemoModeEnabled)
+            {
+                StatusMessage = $"[Demo] Selected motor: {motorName}";
+            }
+        }
+
         private async Task ExecuteNudgeAsync(char direction)
         {
             if (!CanSendCommands) return;
             IsArduinoBusy = true;
 
-            string logKey = direction == '<' ? "LogNudgeLeft" : "LogNudgeRight";
-            AddLog(_loc.Get(logKey), LogLevel.Info);
+            string dirName = direction == '<' ? "left" : "right";
+            AddLog($"[Calibration] {SelectedMotorName}: nudge {dirName} ('{direction}')...", LogLevel.Info);
 
             if (IsConnected)
             {
                 bool sent = await _serialManager.SendCommandAsync(direction);
                 if (sent)
                 {
-                    StatusMessage = direction == '<' ? "Motor step left ('<')..." : "Motor step right ('>')...";
+                    StatusMessage = $"{SelectedMotorName}: step {dirName} ('{direction}')...";
                     StartLidSafetyTimeout(3000);
                 }
                 else
@@ -802,8 +870,8 @@ namespace SmartBinApp.ViewModels
                     Dispatch(() =>
                     {
                         IsArduinoBusy = false;
-                        StatusMessage = direction == '<' ? "[Demo] Stepped Left ('<')" : "[Demo] Stepped Right ('>')";
-                        AddLog(direction == '<' ? "[Demo] Motor nudged left ('<')" : "[Demo] Motor nudged right ('>')", LogLevel.Success);
+                        StatusMessage = $"[Demo] {SelectedMotorName}: stepped {dirName} ('{direction}')";
+                        AddLog($"[Demo] {SelectedMotorName}: nudged {dirName} ('{direction}')", LogLevel.Success);
                     });
                 });
             }
@@ -814,15 +882,15 @@ namespace SmartBinApp.ViewModels
             if (!CanSendCommands) return;
             IsArduinoBusy = true;
 
-            AddLog(_loc.Get("LogSetZero"), LogLevel.Info);
+            AddLog($"[Calibration] {SelectedMotorName}: saving Zero / Home position ('Z')...", LogLevel.Info);
 
             if (IsConnected)
             {
                 bool sent = await _serialManager.SendCommandAsync('Z');
                 if (sent)
                 {
-                    StatusMessage = _loc.Get("StatusZeroSet");
-                    AddLog(_loc.Get("LogZeroSet"), LogLevel.Success);
+                    StatusMessage = $"{SelectedMotorName}: Home Zero set ('Z')";
+                    AddLog($"[Calibration] {SelectedMotorName}: Zero set and saved to EEPROM!", LogLevel.Success);
                     StartLidSafetyTimeout(3000);
                 }
                 else
@@ -839,8 +907,8 @@ namespace SmartBinApp.ViewModels
                     Dispatch(() =>
                     {
                         IsArduinoBusy = false;
-                        StatusMessage = _loc.Get("StatusZeroSet");
-                        AddLog(_loc.Get("LogZeroSet"), LogLevel.Success);
+                        StatusMessage = $"{SelectedMotorName}: Home Zero set ('Z')";
+                        AddLog($"[Demo] {SelectedMotorName}: Zero set and saved!", LogLevel.Success);
                     });
                 });
             }
@@ -992,6 +1060,10 @@ namespace SmartBinApp.ViewModels
             SimulatePlasticCommand.RaiseCanExecuteChanged();
             SimulatePaperCommand.RaiseCanExecuteChanged();
             SimulateOrganicCommand.RaiseCanExecuteChanged();
+            SelectMotorAllCommand.RaiseCanExecuteChanged();
+            SelectMotorPlasticCommand.RaiseCanExecuteChanged();
+            SelectMotorPaperCommand.RaiseCanExecuteChanged();
+            SelectMotorOrganicCommand.RaiseCanExecuteChanged();
             NudgeLeftCommand.RaiseCanExecuteChanged();
             NudgeRightCommand.RaiseCanExecuteChanged();
             SetZeroCommand.RaiseCanExecuteChanged();

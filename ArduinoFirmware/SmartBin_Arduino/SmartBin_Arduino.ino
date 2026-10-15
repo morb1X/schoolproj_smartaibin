@@ -53,7 +53,11 @@ const int LED_PIN = 13;          // Built-in activity LED
   const int ANGLE_OPENED = 95;       // Open position (degrees)
   const int LID_HOLD_TIME_MS = 2500; // Hold open duration (2.5 sec)
 
-  int calibratedZeroOffset = 0;      // Calibrated offset saved in EEPROM
+  // Calibrated offsets saved in EEPROM for each individual lid
+  int offsetPlastic = 0;
+  int offsetPaper = 0;
+  int offsetOrganic = 0;
+
   Servo servoPlastic;
   Servo servoPaper;
   Servo servoOrganic;
@@ -85,33 +89,46 @@ const int LED_PIN = 13;          // Built-in activity LED
   Servo servoChute;
 #endif
 
+// Active motor target for calibration: 0 = ALL, 1 = PLASTIC, 2 = PAPER, 3 = ORGANIC
+byte activeCalibrationMotor = 0;
+
 // =====================================================================================
 // CALIBRATION & EEPROM HELPER FUNCTIONS
 // =====================================================================================
 void loadCalibration() {
   if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_VAL) {
-    int savedOffset = 0;
-    EEPROM.get(EEPROM_OFFSET_ADDR, savedOffset);
     #ifdef MODE_THREE_SERVOS
-      calibratedZeroOffset = constrain(savedOffset, -30, 30);
+      EEPROM.get(2, offsetPlastic);
+      EEPROM.get(4, offsetPaper);
+      EEPROM.get(6, offsetOrganic);
+      offsetPlastic = constrain(offsetPlastic, -35, 35);
+      offsetPaper = constrain(offsetPaper, -35, 35);
+      offsetOrganic = constrain(offsetOrganic, -35, 35);
     #endif
     #ifdef MODE_SINGLE_SERVO_CHUTE
-      chuteZeroOffset = constrain(savedOffset, -40, 40);
+      EEPROM.get(2, chuteZeroOffset);
+      chuteZeroOffset = constrain(chuteZeroOffset, -40, 40);
     #endif
   }
 }
 
-void saveCalibration(int offset) {
+void saveCalibration() {
   EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_VAL);
-  EEPROM.put(EEPROM_OFFSET_ADDR, offset);
+  #ifdef MODE_THREE_SERVOS
+    EEPROM.put(2, offsetPlastic);
+    EEPROM.put(4, offsetPaper);
+    EEPROM.put(6, offsetOrganic);
+  #endif
+  #ifdef MODE_SINGLE_SERVO_CHUTE
+    EEPROM.put(2, chuteZeroOffset);
+  #endif
 }
 
 void applyZeroPosition() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
-  servoPlastic.write(closedAngle);
-  servoPaper.write(closedAngle);
-  servoOrganic.write(closedAngle);
+  servoPlastic.write(constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45));
+  servoPaper.write(constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45));
+  servoOrganic.write(constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45));
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
@@ -191,6 +208,23 @@ void loop() {
         handleWasteOrganic();
         break;
 
+      // Select Motor for Calibration: 0=All, 1=Plastic, 2=Paper, 3=Organic
+      case '0':
+        activeCalibrationMotor = 0;
+        break;
+
+      case '1':
+        activeCalibrationMotor = 1;
+        break;
+
+      case '2':
+        activeCalibrationMotor = 2;
+        break;
+
+      case '3':
+        activeCalibrationMotor = 3;
+        break;
+
       // Manual Motor Calibration Commands
       case '<':
       case 'L':
@@ -232,8 +266,18 @@ void handleNudgeLeft() {
 #endif
 
 #ifdef MODE_THREE_SERVOS
-  calibratedZeroOffset = constrain(calibratedZeroOffset - 3, -30, 30);
-  applyZeroPosition();
+  if (activeCalibrationMotor == 1 || activeCalibrationMotor == 0) {
+    offsetPlastic = constrain(offsetPlastic - 3, -35, 35);
+    servoPlastic.write(constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45));
+  }
+  if (activeCalibrationMotor == 2 || activeCalibrationMotor == 0) {
+    offsetPaper = constrain(offsetPaper - 3, -35, 35);
+    servoPaper.write(constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45));
+  }
+  if (activeCalibrationMotor == 3 || activeCalibrationMotor == 0) {
+    offsetOrganic = constrain(offsetOrganic - 3, -35, 35);
+    servoOrganic.write(constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45));
+  }
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
@@ -250,8 +294,18 @@ void handleNudgeRight() {
 #endif
 
 #ifdef MODE_THREE_SERVOS
-  calibratedZeroOffset = constrain(calibratedZeroOffset + 3, -30, 30);
-  applyZeroPosition();
+  if (activeCalibrationMotor == 1 || activeCalibrationMotor == 0) {
+    offsetPlastic = constrain(offsetPlastic + 3, -35, 35);
+    servoPlastic.write(constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45));
+  }
+  if (activeCalibrationMotor == 2 || activeCalibrationMotor == 0) {
+    offsetPaper = constrain(offsetPaper + 3, -35, 35);
+    servoPaper.write(constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45));
+  }
+  if (activeCalibrationMotor == 3 || activeCalibrationMotor == 0) {
+    offsetOrganic = constrain(offsetOrganic + 3, -35, 35);
+    servoOrganic.write(constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45));
+  }
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
@@ -268,12 +322,12 @@ void handleSetZero() {
 #endif
 
 #ifdef MODE_THREE_SERVOS
-  saveCalibration(calibratedZeroOffset);
+  saveCalibration();
   applyZeroPosition();
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
-  saveCalibration(chuteZeroOffset);
+  saveCalibration();
   applyZeroPosition();
 #endif
 }
@@ -284,7 +338,7 @@ void handleSetZero() {
 
 void handleWastePlastic() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + offsetPlastic, 0, 45);
   smoothMove(servoPlastic, closedAngle, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
   smoothMove(servoPlastic, ANGLE_OPENED, closedAngle, 15);
@@ -306,7 +360,7 @@ void handleWastePlastic() {
 
 void handleWastePaper() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + offsetPaper, 0, 45);
   smoothMove(servoPaper, closedAngle, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
   smoothMove(servoPaper, ANGLE_OPENED, closedAngle, 15);
@@ -328,7 +382,7 @@ void handleWastePaper() {
 
 void handleWasteOrganic() {
 #ifdef MODE_THREE_SERVOS
-  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + offsetOrganic, 0, 45);
   smoothMove(servoOrganic, closedAngle, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
   smoothMove(servoOrganic, ANGLE_OPENED, closedAngle, 15);

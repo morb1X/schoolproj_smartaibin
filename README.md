@@ -170,9 +170,13 @@ The repository includes a ready-to-use model [`SmartBinApp/best.onnx`](SmartBinA
 | `'P'` | **Plastic** | Opens plastic compartment lid for ~2.5 sec, then closes |
 | `'B'` | **Paper** | Opens paper compartment lid for ~2.5 sec, then closes |
 | `'O'` | **Organic** | Opens organic compartment lid for ~2.5 sec, then closes |
-| `'<'` / `'L'` | **Nudge Left / CCW** | Manually moves motor left (32 steps for stepper, -3° for servo) |
-| `'>'` / `'R'` | **Nudge Right / CW** | Manually moves motor right (32 steps for stepper, +3° for servo) |
-| `'Z'` | **Set Home / Zero** | Saves current physical position to Arduino EEPROM as the reference zero |
+| `'0'` | **Target All Motors** | Selects all motors for simultaneous calibration |
+| `'1'` | **Target Plastic (D9)** | Selects Plastic lid motor for calibration |
+| `'2'` | **Target Paper (D10)** | Selects Paper lid motor for calibration |
+| `'3'` | **Target Organic (D11)** | Selects Organic lid motor for calibration |
+| `'<'` / `'L'` | **Nudge Left / CCW** | Manually moves selected motor left (32 steps for stepper, -3° for servo) |
+| `'>'` / `'R'` | **Nudge Right / CW** | Manually moves selected motor right (32 steps for stepper, +3° for servo) |
+| `'Z'` | **Set Home / Zero** | Saves current position to Arduino EEPROM as the reference zero |
 
 ### Arduino ➔ PC:
 | Response | Trigger | Description |
