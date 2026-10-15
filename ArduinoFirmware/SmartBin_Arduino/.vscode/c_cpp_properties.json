@@ -6,6 +6,8 @@
                 "${workspaceFolder}/**",
                 "C:\\Users\\nadia\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.8\\cores\\arduino",
                 "C:\\Users\\nadia\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.8\\variants\\mega",
+                "C:\\Users\\nadia\\Documents\\Arduino\\libraries\\Servo\\src",
+                "C:\\Users\\nadia\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.8\\libraries\\EEPROM\\src",
                 "C:\\Users\\nadia\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\avr-gcc\\7.3.0-atmel3.6.1-arduino7\\avr\\include"
             ],
             "forcedInclude": [

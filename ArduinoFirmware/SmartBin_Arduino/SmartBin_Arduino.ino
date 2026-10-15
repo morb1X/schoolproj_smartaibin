@@ -6,12 +6,16 @@
  * 
  *  SERIAL PROTOCOL SPECIFICATION (UART 9600 BAUD):
  *  Commands from PC (WPF C# Application):
- *    'P' — Plastic sorting cycle
- *    'B' — Paper & Cardboard sorting cycle
- *    'O' — Organic / Bio-waste sorting cycle
- *    '<' / 'L' — Manual calibration: Nudge motor left (counter-clockwise)
- *    '>' / 'R' — Manual calibration: Nudge motor right (clockwise)
- *    'Z' — Set Zero / Home position (saves to EEPROM and starts cycles from here)
+ *    'P' / 'p' — Plastic sorting cycle
+ *    'B' / 'b' — Paper & Cardboard sorting cycle
+ *    'O' / 'o' — Organic / Bio-waste sorting cycle
+ *    '0'       — Select ALL motors for calibration
+ *    '1'       — Select Motor 0 (Plastic)
+ *    '2'       — Select Motor 1 (Paper)
+ *    '3'       — Select Motor 2 (Organic)
+ *    '<' / 'L' — Manual calibration: Nudge motor left (CCW)
+ *    '>' / 'R' — Manual calibration: Nudge motor right (CW)
+ *    'Z' / 'z' — Set Zero / Home position
  * 
  *  Responses to PC:
  *    "SMARTBIN_READY" — Startup ready signal
@@ -20,15 +24,17 @@
  * =====================================================================================
  */
 
+#include <Arduino.h>
 #include <Servo.h>
 #include <EEPROM.h>
 
 // =====================================================================================
-// SELECT ACTUATOR HARDWARE MODE (UNCOMMENT DESIRED MODE):
+// SELECT ACTUATOR HARDWARE MODE (DEFAULT: FUNDUINO MEGA WITH 3 STEPPER MOTORS):
 // =====================================================================================
-#define MODE_THREE_SERVOS        // MODE 1 (DEFAULT): 3 independent servo lids
-//#define MODE_STEPPER_MOTOR     // MODE 2: 28BYJ-48 Stepper motor with ULN2003 driver
-//#define MODE_SINGLE_SERVO_CHUTE // MODE 3: Single servo rotating distribution chute
+#define MODE_FUNDUINO_THREE_STEPPERS  // MODE 1 (DEFAULT): Funduino Mega + 3 x 28BYJ-48 Steppers + 3 LEDs
+//#define MODE_THREE_SERVOS           // MODE 2: 3 independent servo lids (D9, D10, D11)
+//#define MODE_STEPPER_MOTOR          // MODE 3: Single 28BYJ-48 Stepper carousel
+//#define MODE_SINGLE_SERVO_CHUTE     // MODE 4: Single servo rotating distribution chute
 
 // =====================================================================================
 // EEPROM CALIBRATION PERSISTENCE CONFIGURATION
@@ -41,6 +47,32 @@ const int EEPROM_OFFSET_ADDR = 2;   // 2 bytes for int offset
 // PIN CONFIGURATION & PARAMETERS
 // =====================================================================================
 const int LED_PIN = 13;          // Built-in activity LED
+
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  // 4-Phase Stepper Drive Matrix (Half/Full stepping sequence)
+  const byte phases[4][4] = {
+    {1, 1, 0, 0},
+    {0, 1, 1, 0},
+    {0, 0, 1, 1},
+    {1, 0, 0, 1}
+  };
+
+  // Funduino Mega Stepper Pinout (ULN2003 Drivers):
+  const int stepperPins[3][4] = {
+    {8, 10, 9, 11},    // Motor 0: Plastic
+    {12, 13, 14, 15},  // Motor 1: Paper
+    {16, 17, 18, 19}   // Motor 2: Organic (Bio)
+  };
+
+  // Compartment Indicator LEDs:
+  // Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Organic / Bio)
+  const int ledPins[3] = {5, 6, 7};
+
+  const int STEPS_PER_CYCLE   = 512;   // ~90 degrees rotation per cycle
+  const int CALIBRATION_STEPS = 64;    // ~11.25 degrees per calibration nudge click
+  const int STEP_DELAY_MS     = 3;     // 3 ms per step (high torque & smooth)
+  const int LID_HOLD_TIME_MS  = 2000;  // 2 seconds hold open
+#endif
 
 #ifdef MODE_THREE_SERVOS
   // Servo pins for SG90 / MG995
@@ -63,7 +95,7 @@ const int LED_PIN = 13;          // Built-in activity LED
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
-  // ULN2003 driver pins for 28BYJ-48
+  // ULN2003 driver pins for single 28BYJ-48 carousel
   const int STEPPER_IN1 = 8;
   const int STEPPER_IN2 = 9;
   const int STEPPER_IN3 = 10;
@@ -124,6 +156,15 @@ void saveCalibration() {
 }
 
 void applyZeroPosition() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  for (int m = 0; m < 3; m++) {
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(stepperPins[m][i], LOW);
+    }
+    digitalWrite(ledPins[m], LOW);
+  }
+#endif
+
 #ifdef MODE_THREE_SERVOS
   servoPlastic.write(anglePlastic);
   servoPaper.write(anglePaper);
@@ -140,6 +181,48 @@ void applyZeroPosition() {
 }
 
 // =====================================================================================
+// FUNDUINO THREE STEPPERS HELPER FUNCTIONS
+// =====================================================================================
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+void deenergizeStepper(int m) {
+  if (m < 0 || m >= 3) return;
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(stepperPins[m][i], LOW);
+  }
+}
+
+void rotateStepper(int m, int steps, bool forward) {
+  if (m < 0 || m >= 3) return;
+  for (int s = 0; s < steps; s++) {
+    int p = forward ? (s % 4) : (3 - (s % 4));
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(stepperPins[m][i], phases[p][i]);
+    }
+    delay(STEP_DELAY_MS);
+  }
+  deenergizeStepper(m);
+}
+
+void openStepperLid(int m) {
+  if (m < 0 || m >= 3) return;
+  digitalWrite(ledPins[m], HIGH);
+  rotateStepper(m, STEPS_PER_CYCLE, true);
+  delay(LID_HOLD_TIME_MS);
+  rotateStepper(m, STEPS_PER_CYCLE, false);
+  digitalWrite(ledPins[m], LOW);
+  deenergizeStepper(m);
+}
+
+void nudgeStepper(int m, int steps, bool forward) {
+  if (m < 0 || m >= 3) return;
+  digitalWrite(ledPins[m], HIGH);
+  rotateStepper(m, steps, forward);
+  digitalWrite(ledPins[m], LOW);
+  deenergizeStepper(m);
+}
+#endif
+
+// =====================================================================================
 // SETUP
 // =====================================================================================
 void setup() {
@@ -147,6 +230,24 @@ void setup() {
 
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  for (int m = 0; m < 3; m++) {
+    for (int i = 0; i < 4; i++) {
+      pinMode(stepperPins[m][i], OUTPUT);
+      digitalWrite(stepperPins[m][i], LOW);
+    }
+    pinMode(ledPins[m], OUTPUT);
+    digitalWrite(ledPins[m], LOW);
+  }
+
+  // Diagnostic LED flash
+  for (int m = 0; m < 3; m++) {
+    digitalWrite(ledPins[m], HIGH);
+    delay(80);
+    digitalWrite(ledPins[m], LOW);
+  }
+#endif
 
   // Load saved calibration from EEPROM
   loadCalibration();
@@ -175,6 +276,7 @@ void setup() {
 
   // Send ready signal to PC
   Serial.println(F("SMARTBIN_READY"));
+  Serial.flush();
 }
 
 // =====================================================================================
@@ -259,6 +361,14 @@ void loop() {
 // =====================================================================================
 
 void handleNudgeLeft() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  if (activeCalibrationMotor == 0) {
+    for (int m = 0; m < 3; m++) nudgeStepper(m, CALIBRATION_STEPS, false);
+  } else if (activeCalibrationMotor >= 1 && activeCalibrationMotor <= 3) {
+    nudgeStepper(activeCalibrationMotor - 1, CALIBRATION_STEPS, false);
+  }
+#endif
+
 #ifdef MODE_STEPPER_MOTOR
   stepMotor(CALIBRATION_STEPS, false); // Nudge CCW
   currentStepperOffset -= CALIBRATION_STEPS;
@@ -287,6 +397,14 @@ void handleNudgeLeft() {
 }
 
 void handleNudgeRight() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  if (activeCalibrationMotor == 0) {
+    for (int m = 0; m < 3; m++) nudgeStepper(m, CALIBRATION_STEPS, true);
+  } else if (activeCalibrationMotor >= 1 && activeCalibrationMotor <= 3) {
+    nudgeStepper(activeCalibrationMotor - 1, CALIBRATION_STEPS, true);
+  }
+#endif
+
 #ifdef MODE_STEPPER_MOTOR
   stepMotor(CALIBRATION_STEPS, true); // Nudge CW
   currentStepperOffset += CALIBRATION_STEPS;
@@ -315,6 +433,13 @@ void handleNudgeRight() {
 }
 
 void handleSetZero() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  for (int m = 0; m < 3; m++) {
+    deenergizeStepper(m);
+    digitalWrite(ledPins[m], LOW);
+  }
+#endif
+
 #ifdef MODE_STEPPER_MOTOR
   // Mark current position as Home / 0
   currentStepperOffset = 0;
@@ -337,6 +462,10 @@ void handleSetZero() {
 // =====================================================================================
 
 void handleWastePlastic() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  openStepperLid(0);
+#endif
+
 #ifdef MODE_THREE_SERVOS
   int openAngle = constrain(anglePlastic + ANGLE_DELTA_OPEN, 20, 180);
   smoothMove(servoPlastic, anglePlastic, openAngle, 15);
@@ -359,6 +488,10 @@ void handleWastePlastic() {
 }
 
 void handleWastePaper() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  openStepperLid(1);
+#endif
+
 #ifdef MODE_THREE_SERVOS
   int openAngle = constrain(anglePaper + ANGLE_DELTA_OPEN, 20, 180);
   smoothMove(servoPaper, anglePaper, openAngle, 15);
@@ -381,6 +514,10 @@ void handleWastePaper() {
 }
 
 void handleWasteOrganic() {
+#ifdef MODE_FUNDUINO_THREE_STEPPERS
+  openStepperLid(2);
+#endif
+
 #ifdef MODE_THREE_SERVOS
   int openAngle = constrain(angleOrganic + ANGLE_DELTA_OPEN, 20, 180);
   smoothMove(servoOrganic, angleOrganic, openAngle, 15);
@@ -403,7 +540,7 @@ void handleWasteOrganic() {
 }
 
 // =====================================================================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS FOR SERVOS & SINGLE STEPPER
 // =====================================================================================
 
 #ifdef MODE_THREE_SERVOS
