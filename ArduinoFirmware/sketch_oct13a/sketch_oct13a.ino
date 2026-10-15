@@ -6,34 +6,36 @@
  * 
  *  HARDWARE SETUP (FUNDUINO / ARDUINO MEGA 2560):
  *  - 3 x 28BYJ-48 Stepper Motors with ULN2003 Drivers:
- *      Motor 0 (Plastic): Pins 8, 10, 9, 11
- *      Motor 1 (Paper):   Pins 12, 13, 14, 15
- *      Motor 2 (Organic): Pins 16, 17, 18, 19
+ *      Motor 0 (Platform Lift Winch): Pins 8, 10, 9, 11
+ *      Motor 1 (Left Sorter Flap):    Pins 12, 13, 14, 15
+ *      Motor 2 (Right Sorter Flap):   Pins 16, 17, 18, 19
  *  - 3 x Compartment Indicator LEDs:
  *      Pin 5: Red LED   (Plastic)
  *      Pin 6: Green LED (Paper)
  *      Pin 7: Blue LED  (Organic / Bio)
  * 
- *  SERIAL PROTOCOL SPECIFICATION (UART 9600 BAUD):
- *    'P' / 'p' — Plastic sorting cycle
- *    'B' / 'b' — Paper & Cardboard sorting cycle
- *    'O' / 'o' — Organic / Bio-waste sorting cycle
- *    '0'       — Select ALL motors for calibration
- *    '1'       — Select Motor 0 (Plastic)
- *    '2'       — Select Motor 1 (Paper)
- *    '3'       — Select Motor 2 (Organic)
- *    '<' / 'L' — Manual calibration: Nudge motor left (CCW)
- *    '>' / 'R' — Manual calibration: Nudge motor right (CW)
- *    'Z' / 'z' — Set Zero / Home position
+ *  SORTING MECHANICS:
+ *  - PLASTIC ('P'): Sorter flaps tilt inward FIRST (Left CW, Right CCW), then platform
+ *                   lifts to drop plastic straight down the center chute.
+ *  - PAPER   ('B'): Platform lifts FIRST, then Left flap tilts CCW (left ramp)
+ *                   so paper slides off to the left box.
+ *  - BIO     ('O'): Platform lifts FIRST, then Right flap tilts CW (right ramp)
+ *                   so organic waste slides off to the right box.
  * 
- *  RESPONSES TO PC:
- *    "SMARTBIN_READY" — Startup ready signal
- *    'K'              — Cycle/calibration complete, ready for next command
+ *  CALIBRATION:
+ *  - '0' = All Motors, '1' = Platform Winch, '2' = Left Flap, '3' = Right Flap
+ *  - '<' / 'L' = Nudge CCW, '>' / 'R' = Nudge CW, 'Z' = Set Zero / Home
  * =====================================================================================
  */
 
 #include <Arduino.h>
 
+// Motor indices:
+const int MOTOR_PLATFORM = 0; // Winch thread motor on table (Pins 8, 10, 9, 11)
+const int MOTOR_LEFT     = 1; // Left sorter flap (Pins 12, 13, 14, 15)
+const int MOTOR_RIGHT    = 2; // Right sorter flap (Pins 16, 17, 18, 19)
+
+// 4-Phase Stepper Drive Matrix:
 const byte phases[4][4] = {
   {1, 1, 0, 0},
   {0, 1, 1, 0},
@@ -42,24 +44,22 @@ const byte phases[4][4] = {
 };
 
 const int pins[3][4] = {
-  {8, 10, 9, 11},    // Motor 0: Plastic
-  {12, 13, 14, 15},  // Motor 1: Paper
-  {16, 17, 18, 19}   // Motor 2: Organic (Bio)
+  {8, 10, 9, 11},    // Motor 0: Table Platform Winch
+  {12, 13, 14, 15},  // Motor 1: Left Sorter Flap (Paper)
+  {16, 17, 18, 19}   // Motor 2: Right Sorter Flap (Bio)
 };
 
-// Compartment indicator LEDs:
-// Pin 5 = Red (Plastic)
-// Pin 6 = Green (Paper)
-// Pin 7 = Blue (Organic / Bio)
+// Indicator LEDs: Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Bio)
 const int ledPins[3] = {5, 6, 7};
 
-// Parameters for 28BYJ-48 stepper motors with ULN2003 driver:
-const int STEPS_PER_CYCLE   = 512;   // ~90 degrees rotation per sorting cycle
-const int CALIBRATION_STEPS = 64;    // ~11.25 degrees per manual calibration click
-const int STEP_DELAY_MS     = 3;     // 3 ms per step (smooth & reliable torque)
-const int LID_HOLD_TIME_MS  = 2000;  // 2 seconds hold open duration
+// Mechanical motion parameters:
+const int STEPS_FLAP_TILT     = 380;  // ~67 degrees tilt for sorter flaps (60-75 deg range)
+const int STEPS_PLATFORM_LIFT = 512;  // Thread winding steps to lift inspection platform
+const int CALIBRATION_STEPS   = 64;   // Steps per manual calibration nudge click (~11 deg)
+const int STEP_DELAY_MS       = 3;    // 3 ms per step (smooth & reliable torque)
+const int LID_HOLD_TIME_MS    = 1800; // Hold open duration for trash to fall through
 
-// Active calibration motor target: 0 = ALL, 1 = Plastic, 2 = Paper, 3 = Organic
+// Active calibration motor target: 0 = ALL, 1 = Platform, 2 = Left Flap, 3 = Right Flap
 byte activeCalibrationMotor = 0;
 
 void deenergizeMotor(int m) {
@@ -75,6 +75,7 @@ void deenergizeAll() {
   }
 }
 
+// Rotate a single stepper motor
 void rotate(int m, int steps, bool forward) {
   if (m < 0 || m >= 3) return;
   for (int s = 0; s < steps; s++) {
@@ -87,38 +88,112 @@ void rotate(int m, int steps, bool forward) {
   deenergizeMotor(m);
 }
 
-void openLid(int m) {
-  if (m < 0 || m >= 3) return;
-  digitalWrite(ledPins[m], HIGH); // Turn on indicator LED
-  rotate(m, STEPS_PER_CYCLE, true);
+// Rotate two stepper motors simultaneously (for opening/closing dual flaps together)
+void rotateTwo(int m1, bool fwd1, int m2, bool fwd2, int steps) {
+  if (m1 < 0 || m1 >= 3 || m2 < 0 || m2 >= 3) return;
+  for (int s = 0; s < steps; s++) {
+    int p1 = fwd1 ? (s % 4) : (3 - (s % 4));
+    int p2 = fwd2 ? (s % 4) : (3 - (s % 4));
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(pins[m1][i], phases[p1][i]);
+      digitalWrite(pins[m2][i], phases[p2][i]);
+    }
+    delay(STEP_DELAY_MS);
+  }
+  deenergizeMotor(m1);
+  deenergizeMotor(m2);
+}
+
+// -------------------------------------------------------------------------------------
+// SORTING SEQUENCES
+// -------------------------------------------------------------------------------------
+
+// Plastic ('P'): Flaps tilt inward FIRST (opening center chute), then platform lifts
+void handleWastePlastic() {
+  digitalWrite(ledPins[0], HIGH); // Red LED on
+
+  // 1. Sorter flaps tilt inward: Left CW, Right CCW (opening middle gap)
+  rotateTwo(MOTOR_LEFT, true, MOTOR_RIGHT, false, STEPS_FLAP_TILT);
+  delay(300);
+
+  // 2. Platform lifts to dump plastic down into the center
+  rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
   delay(LID_HOLD_TIME_MS);
-  rotate(m, STEPS_PER_CYCLE, false);
-  digitalWrite(ledPins[m], LOW);  // Turn off indicator LED
-  deenergizeMotor(m);
-  Serial.println('K');
-  Serial.flush();
+
+  // 3. Platform lowers back down to table
+  rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
+  delay(300);
+
+  // 4. Sorter flaps return back to horizontal (Left CCW, Right CW)
+  rotateTwo(MOTOR_LEFT, false, MOTOR_RIGHT, true, STEPS_FLAP_TILT);
+
+  digitalWrite(ledPins[0], LOW); // Red LED off
+  deenergizeAll();
 }
 
-void nudgeMotor(int m, int steps, bool forward) {
-  if (m < 0 || m >= 3) return;
-  digitalWrite(ledPins[m], HIGH);
-  rotate(m, steps, forward);
-  digitalWrite(ledPins[m], LOW);
-  deenergizeMotor(m);
+// Paper ('B'): Platform lifts FIRST, then Left flap tilts CCW (left ramp)
+void handleWastePaper() {
+  digitalWrite(ledPins[1], HIGH); // Green LED on
+
+  // 1. Platform lifts to dump paper onto sorter
+  rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
+  delay(200);
+
+  // 2. Left flap tilts CCW (left ramp into paper compartment)
+  rotate(MOTOR_LEFT, STEPS_FLAP_TILT, false);
+  delay(LID_HOLD_TIME_MS);
+
+  // 3. Platform lowers back down to table
+  rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
+  delay(200);
+
+  // 4. Left flap returns to horizontal (CW)
+  rotate(MOTOR_LEFT, STEPS_FLAP_TILT, true);
+
+  digitalWrite(ledPins[1], LOW); // Green LED off
+  deenergizeAll();
 }
 
+// Bio / Organic ('O'): Platform lifts FIRST, then Right flap tilts CW (right ramp)
+void handleWasteOrganic() {
+  digitalWrite(ledPins[2], HIGH); // Blue LED on
+
+  // 1. Platform lifts to dump organic waste onto sorter
+  rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
+  delay(200);
+
+  // 2. Right flap tilts CW (right ramp into bio compartment)
+  rotate(MOTOR_RIGHT, STEPS_FLAP_TILT, true);
+  delay(LID_HOLD_TIME_MS);
+
+  // 3. Platform lowers back down to table
+  rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
+  delay(200);
+
+  // 4. Right flap returns to horizontal (CCW)
+  rotate(MOTOR_RIGHT, STEPS_FLAP_TILT, false);
+
+  digitalWrite(ledPins[2], LOW); // Blue LED off
+  deenergizeAll();
+}
+
+// -------------------------------------------------------------------------------------
+// CALIBRATION LOGIC
+// -------------------------------------------------------------------------------------
 void handleNudge(bool forward) {
   if (activeCalibrationMotor == 0) {
-    // Nudge all motors
+    // All motors
     for (int m = 0; m < 3; m++) {
-      nudgeMotor(m, CALIBRATION_STEPS, forward);
+      digitalWrite(ledPins[m], HIGH);
+      rotate(m, CALIBRATION_STEPS, forward);
+      digitalWrite(ledPins[m], LOW);
     }
   } else if (activeCalibrationMotor >= 1 && activeCalibrationMotor <= 3) {
-    // Nudge specific motor (index 0, 1, or 2)
-    nudgeMotor(activeCalibrationMotor - 1, CALIBRATION_STEPS, forward);
+    int m = activeCalibrationMotor - 1;
+    digitalWrite(ledPins[m], HIGH);
+    rotate(m, CALIBRATION_STEPS, forward);
+    digitalWrite(ledPins[m], LOW);
   }
-  Serial.println('K');
-  Serial.flush();
 }
 
 void setup() {
@@ -133,7 +208,7 @@ void setup() {
     digitalWrite(ledPins[m], LOW);
   }
 
-  // Self-test LED flash sequence on startup (confirm board & wiring active)
+  // Self-test LED sequence on boot
   for (int m = 0; m < 3; m++) {
     digitalWrite(ledPins[m], HIGH);
     delay(80);
@@ -143,7 +218,6 @@ void setup() {
   deenergizeAll();
   delay(200);
 
-  // Send ready signal to PC
   Serial.println(F("SMARTBIN_READY"));
   Serial.flush();
 }
@@ -157,48 +231,40 @@ void loop() {
     }
 
     switch (c) {
-      // Normal Sorting Cycles
+      // Sorting Cycles
       case 'P':
       case 'p':
-        openLid(0); // Plastic
+        handleWastePlastic();
         break;
 
       case 'B':
       case 'b':
-        openLid(1); // Paper
+        handleWastePaper();
         break;
 
       case 'O':
       case 'o':
-        openLid(2); // Organic (Bio)
+        handleWasteOrganic();
         break;
 
-      // Select Target Motor for Calibration: 0=All, 1=Plastic, 2=Paper, 3=Organic
+      // Calibration Motor Selection: 0=All, 1=Platform, 2=Left Flap, 3=Right Flap
       case '0':
         activeCalibrationMotor = 0;
-        Serial.println('K');
-        Serial.flush();
         break;
 
       case '1':
         activeCalibrationMotor = 1;
-        Serial.println('K');
-        Serial.flush();
         break;
 
       case '2':
         activeCalibrationMotor = 2;
-        Serial.println('K');
-        Serial.flush();
         break;
 
       case '3':
         activeCalibrationMotor = 3;
-        Serial.println('K');
-        Serial.flush();
         break;
 
-      // Manual Motor Calibration Commands
+      // Manual Calibration Nudge
       case '<':
       case 'L':
       case 'l':
@@ -211,15 +277,18 @@ void loop() {
         handleNudge(true);  // CW (Right)
         break;
 
+      // Set Zero / Home Position
       case 'Z':
       case 'z':
         deenergizeAll();
-        Serial.println('K');
-        Serial.flush();
         break;
 
       default:
         break;
     }
+
+    // Acknowledge command completion to PC
+    Serial.println('K');
+    Serial.flush();
   }
 }

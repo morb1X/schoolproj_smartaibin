@@ -133,9 +133,9 @@ namespace SmartBinApp.Services
             _en["CalibrationTitle"] = "📐 Motor Calibration & Zero Position";
             _en["CalibrationDesc"] = "Select a motor, adjust left/right, and save as Home Zero.";
             _en["CalibrationMotorAll"] = "All";
-            _en["CalibrationMotorPlastic"] = "Plastic (M1)";
-            _en["CalibrationMotorPaper"] = "Paper (M2)";
-            _en["CalibrationMotorOrganic"] = "Organic (M3)";
+            _en["CalibrationMotorPlastic"] = "Platform (M1)";
+            _en["CalibrationMotorPaper"] = "Left Flap (M2)";
+            _en["CalibrationMotorOrganic"] = "Right Flap (M3)";
             _en["BtnNudgeLeft"] = "◀ Step Left";
             _en["BtnNudgeRight"] = "Step Right ▶";
             _en["BtnSetZero"] = "🎯 Set Zero / Home";
@@ -245,9 +245,9 @@ namespace SmartBinApp.Services
             _de["CalibrationTitle"] = "📐 Motorkalibrierung (Nullposition)";
             _de["CalibrationDesc"] = "Motor wählen, links/rechts ausrichten und als Nullpunkt speichern.";
             _de["CalibrationMotorAll"] = "Alle";
-            _de["CalibrationMotorPlastic"] = "Plastik (M1)";
-            _de["CalibrationMotorPaper"] = "Papier (M2)";
-            _de["CalibrationMotorOrganic"] = "Bioabfall (M3)";
+            _de["CalibrationMotorPlastic"] = "Plattform (M1)";
+            _de["CalibrationMotorPaper"] = "Klappe Links (M2)";
+            _de["CalibrationMotorOrganic"] = "Klappe Rechts (M3)";
             _de["BtnNudgeLeft"] = "◀ Schritt Links";
             _de["BtnNudgeRight"] = "Schritt Rechts ▶";
             _de["BtnSetZero"] = "🎯 Nullpunkt setzen";

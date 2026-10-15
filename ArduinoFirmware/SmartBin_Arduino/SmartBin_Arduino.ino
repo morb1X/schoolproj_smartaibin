@@ -10,9 +10,9 @@
  *    'B' / 'b' — Paper & Cardboard sorting cycle
  *    'O' / 'o' — Organic / Bio-waste sorting cycle
  *    '0'       — Select ALL motors for calibration
- *    '1'       — Select Motor 0 (Plastic)
- *    '2'       — Select Motor 1 (Paper)
- *    '3'       — Select Motor 2 (Organic)
+ *    '1'       — Select Motor 0 (Platform Lift Winch)
+ *    '2'       — Select Motor 1 (Left Sorter Flap)
+ *    '3'       — Select Motor 2 (Right Sorter Flap)
  *    '<' / 'L' — Manual calibration: Nudge motor left (CCW)
  *    '>' / 'R' — Manual calibration: Nudge motor right (CW)
  *    'Z' / 'z' — Set Zero / Home position
@@ -49,7 +49,12 @@ const int EEPROM_OFFSET_ADDR = 2;   // 2 bytes for int offset
 const int LED_PIN = 13;          // Built-in activity LED
 
 #ifdef MODE_FUNDUINO_THREE_STEPPERS
-  // 4-Phase Stepper Drive Matrix (Half/Full stepping sequence)
+  // Motor indices:
+  const int MOTOR_PLATFORM = 0; // Winch thread motor on table (Pins 8, 10, 9, 11)
+  const int MOTOR_LEFT     = 1; // Left sorter flap (Pins 12, 13, 14, 15)
+  const int MOTOR_RIGHT    = 2; // Right sorter flap (Pins 16, 17, 18, 19)
+
+  // 4-Phase Stepper Drive Matrix:
   const byte phases[4][4] = {
     {1, 1, 0, 0},
     {0, 1, 1, 0},
@@ -59,19 +64,20 @@ const int LED_PIN = 13;          // Built-in activity LED
 
   // Funduino Mega Stepper Pinout (ULN2003 Drivers):
   const int stepperPins[3][4] = {
-    {8, 10, 9, 11},    // Motor 0: Plastic
-    {12, 13, 14, 15},  // Motor 1: Paper
-    {16, 17, 18, 19}   // Motor 2: Organic (Bio)
+    {8, 10, 9, 11},    // Motor 0: Table Platform Winch
+    {12, 13, 14, 15},  // Motor 1: Left Sorter Flap (Paper)
+    {16, 17, 18, 19}   // Motor 2: Right Sorter Flap (Bio)
   };
 
   // Compartment Indicator LEDs:
-  // Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Organic / Bio)
+  // Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Bio / Organic)
   const int ledPins[3] = {5, 6, 7};
 
-  const int STEPS_PER_CYCLE   = 512;   // ~90 degrees rotation per cycle
-  const int CALIBRATION_STEPS = 64;    // ~11.25 degrees per calibration nudge click
-  const int STEP_DELAY_MS     = 3;     // 3 ms per step (high torque & smooth)
-  const int LID_HOLD_TIME_MS  = 2000;  // 2 seconds hold open
+  const int STEPS_FLAP_TILT     = 380;   // ~67 degrees tilt for sorter flaps (60-75 deg range)
+  const int STEPS_PLATFORM_LIFT = 512;   // Thread winding steps to lift inspection platform
+  const int CALIBRATION_STEPS   = 64;    // ~11.25 degrees per calibration nudge click
+  const int STEP_DELAY_MS       = 3;     // 3 ms per step (high torque & smooth)
+  const int LID_HOLD_TIME_MS    = 1800;  // 1.8 seconds hold open
 #endif
 
 #ifdef MODE_THREE_SERVOS
@@ -120,7 +126,7 @@ const int LED_PIN = 13;          // Built-in activity LED
   Servo servoChute;
 #endif
 
-// Active motor target for calibration: 0 = ALL, 1 = PLASTIC, 2 = PAPER, 3 = ORGANIC
+// Active motor target for calibration: 0 = ALL, 1 = Platform, 2 = Left Flap, 3 = Right Flap
 byte activeCalibrationMotor = 0;
 
 // =====================================================================================
@@ -203,14 +209,19 @@ void rotateStepper(int m, int steps, bool forward) {
   deenergizeStepper(m);
 }
 
-void openStepperLid(int m) {
-  if (m < 0 || m >= 3) return;
-  digitalWrite(ledPins[m], HIGH);
-  rotateStepper(m, STEPS_PER_CYCLE, true);
-  delay(LID_HOLD_TIME_MS);
-  rotateStepper(m, STEPS_PER_CYCLE, false);
-  digitalWrite(ledPins[m], LOW);
-  deenergizeStepper(m);
+void rotateTwoSteppers(int m1, bool fwd1, int m2, bool fwd2, int steps) {
+  if (m1 < 0 || m1 >= 3 || m2 < 0 || m2 >= 3) return;
+  for (int s = 0; s < steps; s++) {
+    int p1 = fwd1 ? (s % 4) : (3 - (s % 4));
+    int p2 = fwd2 ? (s % 4) : (3 - (s % 4));
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(stepperPins[m1][i], phases[p1][i]);
+      digitalWrite(stepperPins[m2][i], phases[p2][i]);
+    }
+    delay(STEP_DELAY_MS);
+  }
+  deenergizeStepper(m1);
+  deenergizeStepper(m2);
 }
 
 void nudgeStepper(int m, int steps, bool forward) {
@@ -309,7 +320,7 @@ void loop() {
         handleWasteOrganic();
         break;
 
-      // Select Motor for Calibration: 0=All, 1=Plastic, 2=Paper, 3=Organic
+      // Select Motor for Calibration: 0=All, 1=Platform, 2=Left Flap, 3=Right Flap
       case '0':
         activeCalibrationMotor = 0;
         break;
@@ -463,7 +474,25 @@ void handleSetZero() {
 
 void handleWastePlastic() {
 #ifdef MODE_FUNDUINO_THREE_STEPPERS
-  openStepperLid(0);
+  digitalWrite(ledPins[0], HIGH); // Red LED on
+
+  // 1. Sorter flaps tilt inward: Left CW, Right CCW (opening middle gap)
+  rotateTwoSteppers(MOTOR_LEFT, true, MOTOR_RIGHT, false, STEPS_FLAP_TILT);
+  delay(300);
+
+  // 2. Platform lifts to dump plastic down into the center
+  rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
+  delay(LID_HOLD_TIME_MS);
+
+  // 3. Platform lowers back down to table
+  rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
+  delay(300);
+
+  // 4. Sorter flaps return back to horizontal (Left CCW, Right CW)
+  rotateTwoSteppers(MOTOR_LEFT, false, MOTOR_RIGHT, true, STEPS_FLAP_TILT);
+
+  digitalWrite(ledPins[0], LOW); // Red LED off
+  for (int m = 0; m < 3; m++) deenergizeStepper(m);
 #endif
 
 #ifdef MODE_THREE_SERVOS
@@ -489,7 +518,25 @@ void handleWastePlastic() {
 
 void handleWastePaper() {
 #ifdef MODE_FUNDUINO_THREE_STEPPERS
-  openStepperLid(1);
+  digitalWrite(ledPins[1], HIGH); // Green LED on
+
+  // 1. Platform lifts to dump paper onto sorter
+  rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
+  delay(200);
+
+  // 2. Left flap tilts CCW (left ramp into paper compartment)
+  rotateStepper(MOTOR_LEFT, STEPS_FLAP_TILT, false);
+  delay(LID_HOLD_TIME_MS);
+
+  // 3. Platform lowers back down to table
+  rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
+  delay(200);
+
+  // 4. Left flap returns to horizontal (CW)
+  rotateStepper(MOTOR_LEFT, STEPS_FLAP_TILT, true);
+
+  digitalWrite(ledPins[1], LOW); // Green LED off
+  for (int m = 0; m < 3; m++) deenergizeStepper(m);
 #endif
 
 #ifdef MODE_THREE_SERVOS
@@ -515,7 +562,25 @@ void handleWastePaper() {
 
 void handleWasteOrganic() {
 #ifdef MODE_FUNDUINO_THREE_STEPPERS
-  openStepperLid(2);
+  digitalWrite(ledPins[2], HIGH); // Blue LED on
+
+  // 1. Platform lifts to dump organic waste onto sorter
+  rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
+  delay(200);
+
+  // 2. Right flap tilts CW (right ramp into bio compartment)
+  rotateStepper(MOTOR_RIGHT, STEPS_FLAP_TILT, true);
+  delay(LID_HOLD_TIME_MS);
+
+  // 3. Platform lowers back down to table
+  rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
+  delay(200);
+
+  // 4. Right flap returns to horizontal (CCW)
+  rotateStepper(MOTOR_RIGHT, STEPS_FLAP_TILT, false);
+
+  digitalWrite(ledPins[2], LOW); // Blue LED off
+  for (int m = 0; m < 3; m++) deenergizeStepper(m);
 #endif
 
 #ifdef MODE_THREE_SERVOS
