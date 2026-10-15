@@ -1,0 +1,656 @@
+<Window x:Class="SmartBinApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:converters="clr-namespace:SmartBinApp.Converters"
+        xmlns:viewModels="clr-namespace:SmartBinApp.ViewModels"
+        mc:Ignorable="d"
+        Title="AI Smart Bin — Панель управления сортировкой"
+        Height="780" Width="1220"
+        MinHeight="680" MinWidth="1050"
+        Background="#0B0F19"
+        Foreground="#F8FAFC"
+        FontFamily="Segoe UI, Segoe UI Variable, sans-serif"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- Конвертеры данных -->
+        <converters:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <converters:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
+        <converters:LogLevelToBrushConverter x:Key="LogLevelToBrush" />
+        <converters:ConnectionStatusBrushConverter x:Key="ConnectionStatusBrush" />
+        <converters:WasteTypeToBrushConverter x:Key="WasteTypeToBrush" />
+        <converters:ModelStatusBrushConverter x:Key="ModelStatusBrush" />
+
+        <!-- Базовый стиль карточки -->
+        <Style x:Key="CardBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="#111827" />
+            <Setter Property="BorderBrush" Value="#1F2937" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+
+        <!-- Стили кнопок -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#2563EB" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#3B82F6" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1D4ED8" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#334155" />
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="Foreground" Value="#E2E8F0" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#334155" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="#64748B" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#0F172A" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#0F172A" />
+                                <Setter Property="Foreground" Value="#475569" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="#1E293B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Кнопка Plastic (P) -->
+        <Style x:Key="PlasticButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#0284C7" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                BorderBrush="#38BDF8"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#0EA5E9" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#0369A1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#1E293B" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="#334155" />
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Кнопка Paper (B) -->
+        <Style x:Key="PaperButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#D97706" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                BorderBrush="#FBBF24"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#F59E0B" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#B45309" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#1E293B" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="#334155" />
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Кнопка Organic (O) -->
+        <Style x:Key="OrganicButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#059669" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                BorderBrush="#34D399"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#10B981" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#047857" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#1E293B" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="#334155" />
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <!-- 0: Верхняя панель / Шапка -->
+            <RowDefinition Height="Auto"/>
+            <!-- 1: Основная рабочая область -->
+            <RowDefinition Height="*"/>
+            <!-- 2: Нижний статус-бар -->
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- =================== ШАПКА ПРИЛОЖЕНИЯ =================== -->
+        <Border Grid.Row="0" Margin="0,0,0,14" Padding="14,10" Background="#111827" CornerRadius="12" BorderBrush="#1F2937" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Логотип и заголовок -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="38" Height="38" Background="#1E293B" CornerRadius="10" Margin="0,0,12,0" BorderBrush="#38BDF8" BorderThickness="1">
+                        <TextBlock Text="♻" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#38BDF8"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="AI SMART BIN • СОРТИРОВКА ОТХОДОВ" FontSize="16" FontWeight="Bold" Foreground="#F8FAFC"/>
+                        <TextBlock Text="Автономный комплекс распознавания и раздельного сбора мусора" FontSize="11.5" Foreground="#94A3B8"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Бейджи статусов в шапке -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Статус Arduino -->
+                    <Border Background="#1E293B" CornerRadius="20" Padding="12,6" Margin="0,0,8,0" BorderBrush="#334155" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0" Fill="{Binding ArduinoStatusBrush}"/>
+                            <TextBlock Text="{Binding ArduinoStatusText}" FontSize="12" FontWeight="SemiBold" Foreground="{Binding ArduinoStatusBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Статус Камеры -->
+                    <Border Background="#1E293B" CornerRadius="20" Padding="12,6" Margin="0,0,8,0" BorderBrush="#334155" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#94A3B8" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCameraRunning}" Value="True">
+                                                <Setter Property="Fill" Value="#38BDF8" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock FontSize="12" FontWeight="SemiBold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#94A3B8" />
+                                        <Setter Property="Text" Value="Камера: Выкл" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCameraRunning}" Value="True">
+                                                <Setter Property="Foreground" Value="#38BDF8" />
+                                                <Setter Property="Text" Value="Камера: LIVE" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Статус Модели ИИ -->
+                    <Border Background="#1E293B" CornerRadius="20" Padding="12,6" BorderBrush="#334155" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0"
+                                     Fill="{Binding IsModelLoaded, Converter={StaticResource ModelStatusBrush}}"/>
+                            <TextBlock Text="{Binding ModelStatusBadge}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{Binding IsModelLoaded, Converter={StaticResource ModelStatusBrush}}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- =================== ОСНОВНОЙ КОНТЕНТ =================== -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <!-- Левая колонка: Видеопоток -->
+                <ColumnDefinition Width="*"/>
+                <!-- Правая колонка: Панели управления -->
+                <ColumnDefinition Width="420"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ЛЕВАЯ КОЛОНКА: ОБЛАСТЬ ВИДЕОПОТОКА -->
+            <Border Grid.Column="0" Margin="0,0,14,0" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Заголовок панели видео -->
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="📹 Видеомонитор распознавания" FontSize="15" FontWeight="SemiBold" Foreground="#F1F5F9"/>
+                        </StackPanel>
+
+                        <!-- Индикатор FPS -->
+                        <Border DockPanel.Dock="Right" Background="#1E293B" CornerRadius="6" Padding="8,3"
+                                Visibility="{Binding IsCameraRunning, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding CameraFps, StringFormat='{}{0:F1} FPS'}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8"/>
+                        </Border>
+                    </DockPanel>
+
+                    <!-- Окно отображения кадра -->
+                    <Border Grid.Row="1" Background="#070A10" CornerRadius="8" ClipToBounds="True" BorderBrush="#1E293B" BorderThickness="1">
+                        <Grid>
+                            <!-- Заглушка, когда камера выключена -->
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Visibility="{Binding IsCameraRunning, Converter={StaticResource InverseBoolToVis}}">
+                                <Border Width="56" Height="56" Background="#111827" CornerRadius="28" Margin="0,0,0,14" BorderBrush="#374151" BorderThickness="1">
+                                    <TextBlock Text="📷" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.7"/>
+                                </Border>
+                                <TextBlock Text="Видеопоток не активен" FontSize="15" FontWeight="SemiBold" Foreground="#94A3B8" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Нажмите «Запустить камеру» для анализа мусора в реальном времени"
+                                           FontSize="11.5" Foreground="#64748B" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Контрол для вывода живых кадров с камеры -->
+                            <Image x:Name="CameraStreamImage"
+                                   Source="{Binding CurrentFrame}"
+                                   Stretch="Uniform"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   Visibility="{Binding IsCameraRunning, Converter={StaticResource BoolToVis}}"/>
+
+                            <!-- Наложение LIVE в верхнем левом углу видеопотока -->
+                            <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10"
+                                    Background="#CC0F172A" CornerRadius="6" Padding="8,4"
+                                    Visibility="{Binding IsCameraRunning, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#EF4444" Margin="0,0,6,0"/>
+                                    <TextBlock Text="LIVE FEED" FontSize="10.5" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Кнопки управления камерой -->
+                    <DockPanel Grid.Row="2" Margin="0,10,0,0">
+                        <Button Content="{Binding CameraToggleText}"
+                                Command="{Binding ToggleCameraCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Width="170" HorizontalAlignment="Left"/>
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                            <TextBlock Text="📷" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" Opacity="0.7"/>
+                            <ComboBox ItemsSource="{Binding AvailableCameras}"
+                                      SelectedItem="{Binding SelectedCamera, Mode=TwoWay}"
+                                      DisplayMemberPath="Name"
+                                      ToolTip="Выбор устройства захвата видео"
+                                      Width="190" Background="#0F172A" Foreground="#FFFFFF"
+                                      Padding="8,5" FontSize="11.5" VerticalContentAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Grid>
+            </Border>
+
+            <!-- ПРАВАЯ КОЛОНКА: УПРАВЛЕНИЕ И ДЕТЕКЦИЯ -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <!-- 1. COM-порт -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 2. ИИ YOLOv8 -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 3. Ручное тестирование -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 4. Журнал событий -->
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 1. КАРТОЧКА: ПОДКЛЮЧЕНИЕ К ARDUINO -->
+                <Border Grid.Row="0" Margin="0,0,0,10" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="🔌 Связь с Arduino (Serial UART)" FontSize="13.5" FontWeight="SemiBold" Foreground="#F1F5F9" Margin="0,0,0,8"/>
+
+                        <!-- Выбор / Ввод COM-порта -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <ComboBox ItemsSource="{Binding AvailablePorts}"
+                                      SelectedItem="{Binding SelectedPortDevice, Mode=TwoWay}"
+                                      DisplayMemberPath="DisplayName"
+                                      ToolTip="Выберите обнаруженное устройство Arduino или порт"
+                                      Background="#0F172A" Foreground="#FFFFFF"
+                                      Padding="10,6" FontSize="12" VerticalContentAlignment="Center"/>
+
+                            <Button Grid.Column="1"
+                                    Command="{Binding RefreshPortsCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    ToolTip="Повторно просканировать порты"
+                                    Margin="6,0,0,0" Width="34" Padding="0">
+                                <TextBlock Text="🔄" FontSize="13"/>
+                            </Button>
+                        </Grid>
+
+                        <!-- Кнопка АВТО-ОБНАРУЖЕНИЯ И ПОДКЛЮЧЕНИЯ ARDUINO -->
+                        <Button Content="⚡ Авто-поиск и подключение Arduino"
+                                Command="{Binding AutoDetectAndConnectCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Background="#059669"
+                                Margin="0,0,0,8" Padding="10,7" FontSize="12"
+                                ToolTip="Автоматически определяет порт платы Arduino и устанавливает связь"/>
+
+                        <!-- Кнопки Подключить / Отключить -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0"
+                                    Content="Подключить"
+                                    Command="{Binding ConnectCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Padding="10,6" FontSize="12"
+                                    Margin="0,0,4,0"/>
+
+                            <Button Grid.Column="1"
+                                    Content="Отключить"
+                                    Command="{Binding DisconnectCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="10,6" FontSize="12"
+                                    Margin="4,0,0,0"/>
+                        </Grid>
+
+                        <!-- Переключатель Демо-режима / Эмулятора Arduino -->
+                        <Border Margin="0,8,0,0" Padding="8,6" Background="#0F172A" CornerRadius="6" BorderBrush="#334155" BorderThickness="1">
+                            <CheckBox Content="🧪 Демо-режим (Эмулятор Arduino)"
+                                      IsChecked="{Binding IsDemoModeEnabled}"
+                                      ToolTip="Позволяет тестировать авто-сортировку и сброс отсеков без подключения физической платы к USB"
+                                      Foreground="#FBBF24" FontSize="11.5" FontWeight="SemiBold"
+                                      VerticalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- 2. КАРТОЧКА: ИИ РАСПОЗНАВАНИЕ (YOLOv8) -->
+                <Border Grid.Row="1" Margin="0,0,0,10" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="🤖 Модель нейросети (ONNX)" FontSize="13.5" FontWeight="SemiBold" Foreground="#F1F5F9"/>
+                            <TextBlock Text="{Binding ModelStatusBadge}" DockPanel.Dock="Right" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="#38BDF8" VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <!-- Выбор модели нейросети -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding AvailableModels}"
+                                      SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                                      DisplayMemberPath="Name"
+                                      Background="#0F172A" Foreground="#F1F5F9"
+                                      BorderBrush="#334155" Padding="8,5" FontSize="11" Margin="0,0,6,0"
+                                      ToolTip="Выберите активную нейросеть для распознавания отходов"/>
+
+                            <Button Grid.Column="1"
+                                    Content="📁 Обзор..."
+                                    Command="{Binding LoadModelCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="8,5" FontSize="11"
+                                    ToolTip="Загрузить стороннюю модель .onnx с диска"/>
+                        </Grid>
+
+                        <!-- Переключатель Авто-сортировки и Порог -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Content="⚡ Автоматическая сортировка"
+                                      IsChecked="{Binding IsAutoModeEnabled}"
+                                      Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold"
+                                      VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Column="1" Text="{Binding ConfidenceThresholdPercent, StringFormat='Порог: {0}'}"
+                                       FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Слайдер порога уверенности -->
+                        <Slider Minimum="0.20" Maximum="0.95" SmallChange="0.05" LargeChange="0.10"
+                                Value="{Binding ConfidenceThreshold, Mode=TwoWay}"
+                                Margin="0,0,0,8"/>
+
+                        <!-- Индикатор последнего обнаруженного объекта -->
+                        <Border Background="#0B132B" CornerRadius="8" Padding="10,8"
+                                BorderBrush="{Binding LastDetectedCategory, Converter={StaticResource WasteTypeToBrush}}"
+                                BorderThickness="1.5">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Текущее распознавание:" FontSize="10" Foreground="#94A3B8"/>
+                                    <TextBlock Text="{Binding LastDetectionText}" FontSize="13" FontWeight="Bold"
+                                               Foreground="{Binding LastDetectedCategory, Converter={StaticResource WasteTypeToBrush}}"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" Background="#1E293B" CornerRadius="12" Padding="8,4" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding LastDetectedCategory}" FontSize="10" FontWeight="Bold"
+                                               Foreground="{Binding LastDetectedCategory, Converter={StaticResource WasteTypeToBrush}}"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- 3. КАРТОЧКА: РУЧНАЯ СИМУЛЯЦИЯ И ТЕСТ ОТСЕКОВ -->
+                <Border Grid.Row="2" Margin="0,0,0,10" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="🎯 Ручное тестирование отсеков" FontSize="13.5" FontWeight="SemiBold" Foreground="#F1F5F9"/>
+                        </DockPanel>
+
+                        <!-- Индикатор занятости мотора Arduino -->
+                        <Border Background="#1E293B" CornerRadius="6" Padding="8,5" Margin="0,0,0,8"
+                                Visibility="{Binding IsArduinoBusy, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="⚙ Вращение сервопривода крышки (~5 сек)..."
+                                       FontSize="11" FontWeight="SemiBold" Foreground="#FBBF24" HorizontalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Кнопки симуляции в 3 колонки -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0" Content="Пластик 'P'"
+                                    Command="{Binding SimulatePlasticCommand}"
+                                    Style="{StaticResource PlasticButtonStyle}"
+                                    Padding="4,7" FontSize="11" Margin="0,0,3,0"/>
+
+                            <Button Grid.Column="1" Content="Бумага 'B'"
+                                    Command="{Binding SimulatePaperCommand}"
+                                    Style="{StaticResource PaperButtonStyle}"
+                                    Padding="4,7" FontSize="11" Margin="2,0,2,0"/>
+
+                            <Button Grid.Column="2" Content="Органика 'O'"
+                                    Command="{Binding SimulateOrganicCommand}"
+                                    Style="{StaticResource OrganicButtonStyle}"
+                                    Padding="4,7" FontSize="11" Margin="3,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 4. КАРТОЧКА: ЖУРНАЛ СОБЫТИЙ И ТЕЛЕМЕТРИЯ -->
+                <Border Grid.Row="3" Style="{StaticResource CardBorderStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Заголовок журнала -->
+                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                            <TextBlock Text="📋 Журнал событий и ответов Arduino" FontSize="13" FontWeight="SemiBold" Foreground="#F1F5F9"/>
+                            <Button DockPanel.Dock="Right"
+                                    Content="Очистить"
+                                    Command="{Binding ClearLogsCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="6,3" FontSize="10.5"/>
+                        </DockPanel>
+
+                        <!-- Список сообщений терминала -->
+                        <Border Grid.Row="1" Background="#0A0E17" CornerRadius="8" BorderBrush="#1E293B" BorderThickness="1">
+                            <ListBox ItemsSource="{Binding Logs}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     Padding="4">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding FormattedTime}"
+                                                       FontSize="10.5" FontFamily="Consolas, Cascadia Code, monospace"
+                                                       Foreground="#64748B" Margin="0,0,6,0"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Message}"
+                                                       TextWrapping="Wrap"
+                                                       FontSize="11" FontFamily="Consolas, Cascadia Code, monospace"
+                                                       Foreground="{Binding Level, Converter={StaticResource LogLevelToBrush}}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- =================== СТРОКА СОСТОЯНИЯ =================== -->
+        <Border Grid.Row="2" Margin="0,12,0,0" Padding="8,6" Background="#131C2E" CornerRadius="8" BorderBrush="#1E293B" BorderThickness="1">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Статус: " FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8"/>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#38BDF8"/>
+                </StackPanel>
+
+                <TextBlock DockPanel.Dock="Right" Text="AI Smart Bin • YOLOv8 ONNX • OpenCV &amp; Serial UART"
+                           FontSize="11" Foreground="#475569" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
