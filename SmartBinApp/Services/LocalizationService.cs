@@ -130,6 +130,12 @@ namespace SmartBinApp.Services
             _en["BtnPaper"] = "Paper 'B'";
             _en["BtnOrganic"] = "Organic 'O'";
 
+            _en["CalibrationTitle"] = "📐 Motor Calibration & Zero Position";
+            _en["CalibrationDesc"] = "Manually adjust position left/right, then set zero as the starting home position.";
+            _en["BtnNudgeLeft"] = "◀ Step Left";
+            _en["BtnNudgeRight"] = "Step Right ▶";
+            _en["BtnSetZero"] = "🎯 Set Zero / Home";
+
             _en["EventLogCardTitle"] = "📋 Event Log & Arduino Telemetry";
             _en["ClearLogsBtn"] = "Clear";
 
@@ -138,6 +144,11 @@ namespace SmartBinApp.Services
             _en["FooterText"] = "AI Smart Bin • YOLOv8 ONNX • OpenCV & Serial UART";
 
             // Logs
+            _en["LogNudgeLeft"] = "[Calibration] Stepping motor left ('<')...";
+            _en["LogNudgeRight"] = "[Calibration] Stepping motor right ('>')...";
+            _en["LogSetZero"] = "[Calibration] Setting current position as Home/Zero ('Z')...";
+            _en["LogZeroSet"] = "[Calibration] Home position saved! Cycles will now start from this position.";
+            _en["StatusZeroSet"] = "Calibrated Home Position set ('Z')";
             _en["LogAppInitialized"] = "AI Smart Bin application initialized.";
             _en["LogDemoEnabled"] = "[Demo Mode] Arduino Emulator ENABLED. You can test sorting without physical hardware.";
             _en["LogDemoDisabled"] = "[Demo Mode] Arduino Emulator DISABLED.";
@@ -227,6 +238,12 @@ namespace SmartBinApp.Services
             _de["BtnPaper"] = "Papier 'B'";
             _de["BtnOrganic"] = "Bioabfall 'O'";
 
+            _de["CalibrationTitle"] = "📐 Motorkalibrierung (Nullposition)";
+            _de["CalibrationDesc"] = "Motor manuell links/rechts ausrichten und als Start-Nullposition speichern.";
+            _de["BtnNudgeLeft"] = "◀ Schritt Links";
+            _de["BtnNudgeRight"] = "Schritt Rechts ▶";
+            _de["BtnSetZero"] = "🎯 Nullpunkt setzen";
+
             _de["EventLogCardTitle"] = "📋 Ereignisprotokoll & Arduino-Telemetrie";
             _de["ClearLogsBtn"] = "Löschen";
 
@@ -235,6 +252,11 @@ namespace SmartBinApp.Services
             _de["FooterText"] = "AI Smart Bin • YOLOv8 ONNX • OpenCV & Serial UART";
 
             // Logs
+            _de["LogNudgeLeft"] = "[Kalibrierung] Motor nach links bewegen ('<')...";
+            _de["LogNudgeRight"] = "[Kalibrierung] Motor nach rechts bewegen ('>')...";
+            _de["LogSetZero"] = "[Kalibrierung] Speichere aktuelle Position als Nullpunkt ('Z')...";
+            _de["LogZeroSet"] = "[Kalibrierung] Nullpunkt gespeichert! Zyklen starten ab jetzt hier.";
+            _de["StatusZeroSet"] = "Kalibrierter Nullpunkt gesetzt ('Z')";
             _de["LogAppInitialized"] = "AI Smart Bin Anwendung initialisiert.";
             _de["LogDemoEnabled"] = "[Demo-Modus] Arduino-Emulator AKTIVIERT. Sortierung kann ohne Hardware getestet werden.";
             _de["LogDemoDisabled"] = "[Demo-Modus] Arduino-Emulator DEAKTIVIERT.";

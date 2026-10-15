@@ -72,17 +72,20 @@ schoolproj_smartaibin/
 * **Flow Control:** `DTR / RTS = true`
 
 ### Commands (PC ➔ Arduino):
-| Byte | Compartment | Action |
+| Byte | Compartment / Function | Action |
 |:---:|---|---|
 | `'P'` | **Plastic** | Open plastic compartment lid for 2.5–3 sec, then close |
 | `'B'` | **Paper** | Open paper compartment lid for 2.5–3 sec, then close |
 | `'O'` | **Organic** | Open organic/bio compartment lid for 2.5–3 sec, then close |
+| `'<'` / `'L'` | **Nudge Left / CCW** | Incrementally step/turn motor to the left |
+| `'>'` / `'R'` | **Nudge Right / CW** | Incrementally step/turn motor to the right |
+| `'Z'` | **Set Home / Zero** | Save current position as Home / Zero in EEPROM |
 
 ### Responses (Arduino ➔ PC):
 | String / Char | Source | Meaning |
 |:---:|---|---|
-| `"SMARTBIN_READY\n"` | `setup()` on boot | Microcontroller successfully initialized |
-| `'K'` | Motor completion | Lid closed, controller ready for next object |
+| `"SMARTBIN_READY\n"` | `setup()` on boot | Microcontroller successfully initialized and zero restored |
+| `'K'` | Motor completion | Movement finished, controller ready for next command |
 
 ---
 

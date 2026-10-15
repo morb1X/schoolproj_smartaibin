@@ -6,18 +6,22 @@
  * 
  *  SERIAL PROTOCOL SPECIFICATION (UART 9600 BAUD):
  *  Commands from PC (WPF C# Application):
- *    'P' — Plastic
- *    'B' — Paper & Cardboard
- *    'O' — Organic / Bio-waste
+ *    'P' — Plastic sorting cycle
+ *    'B' — Paper & Cardboard sorting cycle
+ *    'O' — Organic / Bio-waste sorting cycle
+ *    '<' / 'L' — Manual calibration: Nudge motor left (counter-clockwise)
+ *    '>' / 'R' — Manual calibration: Nudge motor right (clockwise)
+ *    'Z' — Set Zero / Home position (saves to EEPROM and starts cycles from here)
  * 
  *  Responses to PC:
  *    "SMARTBIN_READY" — Startup ready signal
- *    'K'              — Actuation cycle complete, ready for next object
+ *    'K'              — Actuation/calibration cycle complete, ready for next command
  * 
  * =====================================================================================
  */
 
 #include <Servo.h>
+#include <EEPROM.h>
 
 // =====================================================================================
 // SELECT ACTUATOR HARDWARE MODE (UNCOMMENT DESIRED MODE):
@@ -25,6 +29,13 @@
 #define MODE_THREE_SERVOS        // MODE 1 (DEFAULT): 3 independent servo lids
 //#define MODE_STEPPER_MOTOR     // MODE 2: 28BYJ-48 Stepper motor with ULN2003 driver
 //#define MODE_SINGLE_SERVO_CHUTE // MODE 3: Single servo rotating distribution chute
+
+// =====================================================================================
+// EEPROM CALIBRATION PERSISTENCE CONFIGURATION
+// =====================================================================================
+const int EEPROM_MAGIC_ADDR = 0;
+const byte EEPROM_MAGIC_VAL = 0x53; // 'S'
+const int EEPROM_OFFSET_ADDR = 2;   // 2 bytes for int offset
 
 // =====================================================================================
 // PIN CONFIGURATION & PARAMETERS
@@ -38,10 +49,11 @@ const int LED_PIN = 13;          // Built-in activity LED
   const int SERVO_PIN_ORGANIC = 11;  // Organic lid servo
 
   // Lid angles
-  const int ANGLE_CLOSED = 0;        // Closed position (degrees)
+  const int BASE_ANGLE_CLOSED = 0;   // Base closed position (degrees)
   const int ANGLE_OPENED = 95;       // Open position (degrees)
   const int LID_HOLD_TIME_MS = 2500; // Hold open duration (2.5 sec)
 
+  int calibratedZeroOffset = 0;      // Calibrated offset saved in EEPROM
   Servo servoPlastic;
   Servo servoPaper;
   Servo servoOrganic;
@@ -55,17 +67,61 @@ const int LED_PIN = 13;          // Built-in activity LED
   const int STEPPER_IN4 = 11;
 
   const int STEPS_PER_CYCLE = 512;   // Steps count (~90 degrees)
+  const int CALIBRATION_STEPS = 32;  // Steps per manual nudge (~5.6 degrees)
   const int STEP_DELAY_US = 1500;    // Step delay in microseconds
   const int HOLD_TIME_MS = 2000;     // Pause duration
+
+  int currentStepperOffset = 0;      // Offset from initial boot
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
   const int CHUTE_SERVO_PIN = 9;     // Chute servo pin
   const int ANGLE_CHUTE_PLASTIC = 30; // Tilt left
-  const int ANGLE_CHUTE_PAPER   = 90; // Center
+  const int BASE_CHUTE_CENTER   = 90; // Center
   const int ANGLE_CHUTE_ORGANIC = 150;// Tilt right
+  const int LID_HOLD_TIME_MS = 2500;
+
+  int chuteZeroOffset = 0;           // Calibrated center offset
   Servo servoChute;
 #endif
+
+// =====================================================================================
+// CALIBRATION & EEPROM HELPER FUNCTIONS
+// =====================================================================================
+void loadCalibration() {
+  if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_VAL) {
+    int savedOffset = 0;
+    EEPROM.get(EEPROM_OFFSET_ADDR, savedOffset);
+    #ifdef MODE_THREE_SERVOS
+      calibratedZeroOffset = constrain(savedOffset, -30, 30);
+    #endif
+    #ifdef MODE_SINGLE_SERVO_CHUTE
+      chuteZeroOffset = constrain(savedOffset, -40, 40);
+    #endif
+  }
+}
+
+void saveCalibration(int offset) {
+  EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_VAL);
+  EEPROM.put(EEPROM_OFFSET_ADDR, offset);
+}
+
+void applyZeroPosition() {
+#ifdef MODE_THREE_SERVOS
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  servoPlastic.write(closedAngle);
+  servoPaper.write(closedAngle);
+  servoOrganic.write(closedAngle);
+#endif
+
+#ifdef MODE_SINGLE_SERVO_CHUTE
+  servoChute.write(constrain(BASE_CHUTE_CENTER + chuteZeroOffset, 30, 150));
+#endif
+
+#ifdef MODE_STEPPER_MOTOR
+  stopStepper();
+#endif
+}
 
 // =====================================================================================
 // SETUP
@@ -76,14 +132,13 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  // Load saved calibration from EEPROM
+  loadCalibration();
+
 #ifdef MODE_THREE_SERVOS
   servoPlastic.attach(SERVO_PIN_PLASTIC);
   servoPaper.attach(SERVO_PIN_PAPER);
   servoOrganic.attach(SERVO_PIN_ORGANIC);
-
-  servoPlastic.write(ANGLE_CLOSED);
-  servoPaper.write(ANGLE_CLOSED);
-  servoOrganic.write(ANGLE_CLOSED);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
@@ -91,13 +146,14 @@ void setup() {
   pinMode(STEPPER_IN2, OUTPUT);
   pinMode(STEPPER_IN3, OUTPUT);
   pinMode(STEPPER_IN4, OUTPUT);
-  stopStepper();
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
   servoChute.attach(CHUTE_SERVO_PIN);
-  servoChute.write(ANGLE_CHUTE_PAPER);
 #endif
+
+  // Move to calibrated zero position
+  applyZeroPosition();
 
   delay(300);
 
@@ -119,6 +175,7 @@ void loop() {
     digitalWrite(LED_PIN, HIGH);
 
     switch (cmd) {
+      // Normal Sorting Commands
       case 'P':
       case 'p':
         handleWastePlastic();
@@ -134,6 +191,24 @@ void loop() {
         handleWasteOrganic();
         break;
 
+      // Manual Motor Calibration Commands
+      case '<':
+      case 'L':
+      case 'l':
+        handleNudgeLeft();
+        break;
+
+      case '>':
+      case 'R':
+      case 'r':
+        handleNudgeRight();
+        break;
+
+      case 'Z':
+      case 'z':
+        handleSetZero();
+        break;
+
       default:
         break;
     }
@@ -146,14 +221,73 @@ void loop() {
 }
 
 // =====================================================================================
+// CALIBRATION HANDLERS
+// =====================================================================================
+
+void handleNudgeLeft() {
+#ifdef MODE_STEPPER_MOTOR
+  stepMotor(CALIBRATION_STEPS, false); // Nudge CCW
+  currentStepperOffset -= CALIBRATION_STEPS;
+  stopStepper();
+#endif
+
+#ifdef MODE_THREE_SERVOS
+  calibratedZeroOffset = constrain(calibratedZeroOffset - 3, -30, 30);
+  applyZeroPosition();
+#endif
+
+#ifdef MODE_SINGLE_SERVO_CHUTE
+  chuteZeroOffset = constrain(chuteZeroOffset - 3, -40, 40);
+  applyZeroPosition();
+#endif
+}
+
+void handleNudgeRight() {
+#ifdef MODE_STEPPER_MOTOR
+  stepMotor(CALIBRATION_STEPS, true); // Nudge CW
+  currentStepperOffset += CALIBRATION_STEPS;
+  stopStepper();
+#endif
+
+#ifdef MODE_THREE_SERVOS
+  calibratedZeroOffset = constrain(calibratedZeroOffset + 3, -30, 30);
+  applyZeroPosition();
+#endif
+
+#ifdef MODE_SINGLE_SERVO_CHUTE
+  chuteZeroOffset = constrain(chuteZeroOffset + 3, -40, 40);
+  applyZeroPosition();
+#endif
+}
+
+void handleSetZero() {
+#ifdef MODE_STEPPER_MOTOR
+  // Mark current position as Home / 0
+  currentStepperOffset = 0;
+  stopStepper();
+#endif
+
+#ifdef MODE_THREE_SERVOS
+  saveCalibration(calibratedZeroOffset);
+  applyZeroPosition();
+#endif
+
+#ifdef MODE_SINGLE_SERVO_CHUTE
+  saveCalibration(chuteZeroOffset);
+  applyZeroPosition();
+#endif
+}
+
+// =====================================================================================
 // COMPARTMENT HANDLERS
 // =====================================================================================
 
 void handleWastePlastic() {
 #ifdef MODE_THREE_SERVOS
-  smoothMove(servoPlastic, ANGLE_CLOSED, ANGLE_OPENED, 15);
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  smoothMove(servoPlastic, closedAngle, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
-  smoothMove(servoPlastic, ANGLE_OPENED, ANGLE_CLOSED, 15);
+  smoothMove(servoPlastic, ANGLE_OPENED, closedAngle, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
@@ -166,15 +300,16 @@ void handleWastePlastic() {
 #ifdef MODE_SINGLE_SERVO_CHUTE
   servoChute.write(ANGLE_CHUTE_PLASTIC);
   delay(LID_HOLD_TIME_MS);
-  servoChute.write(ANGLE_CHUTE_PAPER);
+  applyZeroPosition();
 #endif
 }
 
 void handleWastePaper() {
 #ifdef MODE_THREE_SERVOS
-  smoothMove(servoPaper, ANGLE_CLOSED, ANGLE_OPENED, 15);
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  smoothMove(servoPaper, closedAngle, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
-  smoothMove(servoPaper, ANGLE_OPENED, ANGLE_CLOSED, 15);
+  smoothMove(servoPaper, ANGLE_OPENED, closedAngle, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
@@ -185,17 +320,18 @@ void handleWastePaper() {
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
-  servoChute.write(ANGLE_CHUTE_PAPER);
+  servoChute.write(constrain(BASE_CHUTE_CENTER + chuteZeroOffset, 30, 150));
   delay(LID_HOLD_TIME_MS);
-  servoChute.write(ANGLE_CHUTE_PAPER);
+  applyZeroPosition();
 #endif
 }
 
 void handleWasteOrganic() {
 #ifdef MODE_THREE_SERVOS
-  smoothMove(servoOrganic, ANGLE_CLOSED, ANGLE_OPENED, 15);
+  int closedAngle = constrain(BASE_ANGLE_CLOSED + calibratedZeroOffset, 0, 45);
+  smoothMove(servoOrganic, closedAngle, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
-  smoothMove(servoOrganic, ANGLE_OPENED, ANGLE_CLOSED, 15);
+  smoothMove(servoOrganic, ANGLE_OPENED, closedAngle, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
@@ -208,7 +344,7 @@ void handleWasteOrganic() {
 #ifdef MODE_SINGLE_SERVO_CHUTE
   servoChute.write(ANGLE_CHUTE_ORGANIC);
   delay(LID_HOLD_TIME_MS);
-  servoChute.write(ANGLE_CHUTE_PAPER);
+  applyZeroPosition();
 #endif
 }
 

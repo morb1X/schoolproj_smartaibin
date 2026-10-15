@@ -112,6 +112,11 @@ namespace SmartBinApp.ViewModels
         public string BtnPlastic => _loc.Get("BtnPlastic");
         public string BtnPaper => _loc.Get("BtnPaper");
         public string BtnOrganic => _loc.Get("BtnOrganic");
+        public string CalibrationTitle => _loc.Get("CalibrationTitle");
+        public string CalibrationDesc => _loc.Get("CalibrationDesc");
+        public string BtnNudgeLeft => _loc.Get("BtnNudgeLeft");
+        public string BtnNudgeRight => _loc.Get("BtnNudgeRight");
+        public string BtnSetZero => _loc.Get("BtnSetZero");
         public string EventLogCardTitle => _loc.Get("EventLogCardTitle");
         public string ClearLogsBtn => _loc.Get("ClearLogsBtn");
         public string StatusLabel => _loc.Get("StatusLabel");
@@ -149,6 +154,11 @@ namespace SmartBinApp.ViewModels
             OnPropertyChanged(nameof(BtnPlastic));
             OnPropertyChanged(nameof(BtnPaper));
             OnPropertyChanged(nameof(BtnOrganic));
+            OnPropertyChanged(nameof(CalibrationTitle));
+            OnPropertyChanged(nameof(CalibrationDesc));
+            OnPropertyChanged(nameof(BtnNudgeLeft));
+            OnPropertyChanged(nameof(BtnNudgeRight));
+            OnPropertyChanged(nameof(BtnSetZero));
             OnPropertyChanged(nameof(EventLogCardTitle));
             OnPropertyChanged(nameof(ClearLogsBtn));
             OnPropertyChanged(nameof(StatusLabel));
@@ -415,6 +425,9 @@ namespace SmartBinApp.ViewModels
         public RelayCommand SimulatePlasticCommand { get; }
         public RelayCommand SimulatePaperCommand { get; }
         public RelayCommand SimulateOrganicCommand { get; }
+        public RelayCommand NudgeLeftCommand { get; }
+        public RelayCommand NudgeRightCommand { get; }
+        public RelayCommand SetZeroCommand { get; }
         public RelayCommand ClearLogsCommand { get; }
         public RelayCommand LoadModelCommand { get; }
 
@@ -448,6 +461,10 @@ namespace SmartBinApp.ViewModels
             SimulatePlasticCommand = new RelayCommand(async () => await SendWasteCommandAsync('P', _loc.GetWasteShortName(WasteType.Plastic)), () => CanSendCommands);
             SimulatePaperCommand = new RelayCommand(async () => await SendWasteCommandAsync('B', _loc.GetWasteShortName(WasteType.Paper)), () => CanSendCommands);
             SimulateOrganicCommand = new RelayCommand(async () => await SendWasteCommandAsync('O', _loc.GetWasteShortName(WasteType.Organic)), () => CanSendCommands);
+
+            NudgeLeftCommand = new RelayCommand(async () => await ExecuteNudgeAsync('<'), () => CanSendCommands);
+            NudgeRightCommand = new RelayCommand(async () => await ExecuteNudgeAsync('>'), () => CanSendCommands);
+            SetZeroCommand = new RelayCommand(async () => await ExecuteSetZeroAsync(), () => CanSendCommands);
 
             ClearLogsCommand = new RelayCommand(() => Logs.Clear());
             LoadModelCommand = new RelayCommand(ExecuteLoadModel);
@@ -725,7 +742,7 @@ namespace SmartBinApp.ViewModels
             }
         }
 
-        private void StartLidSafetyTimeout()
+        private void StartLidSafetyTimeout(int timeoutMs = 10000)
         {
             _lidTimeoutCts?.Cancel();
             _lidTimeoutCts = new CancellationTokenSource();
@@ -735,7 +752,7 @@ namespace SmartBinApp.ViewModels
             {
                 try
                 {
-                    await Task.Delay(10000, token);
+                    await Task.Delay(timeoutMs, token);
                     if (!token.IsCancellationRequested && IsArduinoBusy)
                     {
                         Dispatch(() =>
@@ -753,6 +770,80 @@ namespace SmartBinApp.ViewModels
                 {
                 }
             }, token);
+        }
+
+        private async Task ExecuteNudgeAsync(char direction)
+        {
+            if (!CanSendCommands) return;
+            IsArduinoBusy = true;
+
+            string logKey = direction == '<' ? "LogNudgeLeft" : "LogNudgeRight";
+            AddLog(_loc.Get(logKey), LogLevel.Info);
+
+            if (IsConnected)
+            {
+                bool sent = await _serialManager.SendCommandAsync(direction);
+                if (sent)
+                {
+                    StatusMessage = direction == '<' ? "Motor step left ('<')..." : "Motor step right ('>')...";
+                    StartLidSafetyTimeout(3000);
+                }
+                else
+                {
+                    IsArduinoBusy = false;
+                    StatusMessage = "Failed to send calibration command.";
+                }
+            }
+            else if (IsDemoModeEnabled)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(300);
+                    Dispatch(() =>
+                    {
+                        IsArduinoBusy = false;
+                        StatusMessage = direction == '<' ? "[Demo] Stepped Left ('<')" : "[Demo] Stepped Right ('>')";
+                        AddLog(direction == '<' ? "[Demo] Motor nudged left ('<')" : "[Demo] Motor nudged right ('>')", LogLevel.Success);
+                    });
+                });
+            }
+        }
+
+        private async Task ExecuteSetZeroAsync()
+        {
+            if (!CanSendCommands) return;
+            IsArduinoBusy = true;
+
+            AddLog(_loc.Get("LogSetZero"), LogLevel.Info);
+
+            if (IsConnected)
+            {
+                bool sent = await _serialManager.SendCommandAsync('Z');
+                if (sent)
+                {
+                    StatusMessage = _loc.Get("StatusZeroSet");
+                    AddLog(_loc.Get("LogZeroSet"), LogLevel.Success);
+                    StartLidSafetyTimeout(3000);
+                }
+                else
+                {
+                    IsArduinoBusy = false;
+                    StatusMessage = "Failed to send zero command.";
+                }
+            }
+            else if (IsDemoModeEnabled)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(400);
+                    Dispatch(() =>
+                    {
+                        IsArduinoBusy = false;
+                        StatusMessage = _loc.Get("StatusZeroSet");
+                        AddLog(_loc.Get("LogZeroSet"), LogLevel.Success);
+                    });
+                });
+            }
         }
 
         private void OnSerialConnectionChanged(bool connected)
@@ -901,6 +992,9 @@ namespace SmartBinApp.ViewModels
             SimulatePlasticCommand.RaiseCanExecuteChanged();
             SimulatePaperCommand.RaiseCanExecuteChanged();
             SimulateOrganicCommand.RaiseCanExecuteChanged();
+            NudgeLeftCommand.RaiseCanExecuteChanged();
+            NudgeRightCommand.RaiseCanExecuteChanged();
+            SetZeroCommand.RaiseCanExecuteChanged();
         }
 
         private void Dispatch(Action action)

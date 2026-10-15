@@ -165,17 +165,20 @@ Im Repository ist bereits ein vortrainiertes Modell [`SmartBinApp/best.onnx`](Sm
 * **Parameter:** `9600 Baud`, `8-N-1`, `DTR/RTS = true`.
 
 ### PC ➔ Arduino:
-| Byte | Zielfraktion | Aktion am Modell |
+| Byte | Zielfraktion / Aktion | Beschreibung |
 |:---:|---|---|
 | `'P'` | **Plastik** | Öffnet die Plastik-Klappe für ca. 2,5 Sek., schließt danach |
 | `'B'` | **Papier** | Öffnet die Papier-Klappe für ca. 2,5 Sek., schließt danach |
 | `'O'` | **Bioabfall** | Öffnet die Bio-Klappe für ca. 2,5 Sek., schließt danach |
+| `'<'` / `'L'` | **Schritt links / Gegenzeigersinn** | Bewegt Motor schrittweise nach links (32 Schritte Stepper, -3° Servo) |
+| `'>'` / `'R'` | **Schritt rechts / Uhrzeigersinn** | Bewegt Motor schrittweise nach rechts (32 Schritte Stepper, +3° Servo) |
+| `'Z'` | **Nullpunkt setzen** | Speichert aktuelle Position im Arduino-EEPROM als Referenz-Nullpunkt |
 
 ### Arduino ➔ PC:
 | Antwort | Ereignis | Bedeutung für das Programm |
 |:---:|---|---|
 | `SMARTBIN_READY\n` | `setup()` beim Start | Bestätigt die Betriebsbereitschaft des Mikrocontrollers |
-| `'K'` | Motorzyklus beendet | Klappe geschlossen, System bereit für das nächste Objekt |
+| `'K'` | Motorzyklus beendet | Bewegung beendet, System bereit für den nächsten Befehl |
 
 ---
 

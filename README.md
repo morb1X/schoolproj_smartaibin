@@ -165,17 +165,20 @@ The repository includes a ready-to-use model [`SmartBinApp/best.onnx`](SmartBinA
 * **Parameters:** `9600 baud`, `8-N-1`, `DTR/RTS = true`.
 
 ### PC ➔ Arduino:
-| Byte | Target Fraction | Action |
+| Byte | Target Fraction / Action | Description |
 |:---:|---|---|
 | `'P'` | **Plastic** | Opens plastic compartment lid for ~2.5 sec, then closes |
 | `'B'` | **Paper** | Opens paper compartment lid for ~2.5 sec, then closes |
 | `'O'` | **Organic** | Opens organic compartment lid for ~2.5 sec, then closes |
+| `'<'` / `'L'` | **Nudge Left / CCW** | Manually moves motor left (32 steps for stepper, -3° for servo) |
+| `'>'` / `'R'` | **Nudge Right / CW** | Manually moves motor right (32 steps for stepper, +3° for servo) |
+| `'Z'` | **Set Home / Zero** | Saves current physical position to Arduino EEPROM as the reference zero |
 
 ### Arduino ➔ PC:
 | Response | Trigger | Description |
 |:---:|---|---|
 | `SMARTBIN_READY\n` | `setup()` boot | Notifies PC that microcontroller is initialized and ready |
-| `'K'` | Motor completion | Lid closed, hardware ready for the next item |
+| `'K'` | Motor completion | Movement finished, hardware ready for the next command |
 
 ---
 

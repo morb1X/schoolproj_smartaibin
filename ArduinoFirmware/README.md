@@ -52,3 +52,15 @@ Suitable for carousel or rotating chute bin designs:
 4. Click **Upload** (`Ctrl + U`).
 5. Once uploaded, close the Serial Monitor in Arduino IDE (to allow the C# app to access the port).
 6. Open **SmartBinApp**, select the COM port and click **Connect**!
+
+---
+
+## 🎯 Motor Calibration & EEPROM Zeroing
+
+To ensure the bin lids or sorting chute align with the physical compartments:
+1. In the **SmartBinApp** under *Manual Actuator Testing & Calibration*:
+   - Click **◀ Step Left** (`'<'`) or **Step Right ▶** (`'>'`) to nudge the motor in small increments.
+   - Once physically aligned, click **🎯 Set Zero / Home** (`'Z'`).
+2. The Arduino firmware writes the zero reference offset into internal **EEPROM** (`EEPROM.put(EEPROM_OFFSET_ADDR, offset)`).
+3. The zero position is **persistent across power cycles and reboots**, so every subsequent sorting cycle starts from this exact calibrated home position!
+
