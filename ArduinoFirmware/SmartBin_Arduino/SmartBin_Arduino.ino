@@ -202,18 +202,26 @@ void deenergizeStepper(int m) {
 
 void rotateStepper(int m, int steps, bool forward) {
   if (m < 0 || m >= 3) return;
+  const int rampSteps = 24;
   for (int s = 0; s < steps; s++) {
     int p = forward ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(stepperPins[m][i], phases[p][i]);
     }
-    delayMicroseconds(STEP_DELAY_US);
+    int delayUs = STEP_DELAY_US;
+    if (s < rampSteps && s < steps / 2) {
+      delayUs += (rampSteps - s) * 40; // Soft-start ramp: 2160 µs down to 1200 µs
+    } else if (s >= steps - rampSteps && steps > rampSteps * 2) {
+      delayUs += (s - (steps - rampSteps)) * 40; // Soft-stop ramp: 1200 µs up to 2160 µs
+    }
+    delayMicroseconds(delayUs);
   }
   deenergizeStepper(m);
 }
 
 void rotateTwoSteppers(int m1, bool fwd1, int m2, bool fwd2, int steps) {
   if (m1 < 0 || m1 >= 3 || m2 < 0 || m2 >= 3) return;
+  const int rampSteps = 24;
   for (int s = 0; s < steps; s++) {
     int p1 = fwd1 ? (s % 8) : (7 - (s % 8));
     int p2 = fwd2 ? (s % 8) : (7 - (s % 8));
@@ -221,7 +229,13 @@ void rotateTwoSteppers(int m1, bool fwd1, int m2, bool fwd2, int steps) {
       digitalWrite(stepperPins[m1][i], phases[p1][i]);
       digitalWrite(stepperPins[m2][i], phases[p2][i]);
     }
-    delayMicroseconds(STEP_DELAY_US);
+    int delayUs = STEP_DELAY_US;
+    if (s < rampSteps && s < steps / 2) {
+      delayUs += (rampSteps - s) * 40;
+    } else if (s >= steps - rampSteps && steps > rampSteps * 2) {
+      delayUs += (s - (steps - rampSteps)) * 40;
+    }
+    delayMicroseconds(delayUs);
   }
   deenergizeStepper(m1);
   deenergizeStepper(m2);
@@ -520,16 +534,16 @@ void handleWastePaper() {
   rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
   delay(200);
 
-  // 2. Left flap tilts CCW (left ramp into paper compartment)
-  rotateStepper(MOTOR_LEFT, STEPS_FLAP_TILT, false);
+  // 2. Left flap tilts CW (left ramp into paper compartment)
+  rotateStepper(MOTOR_LEFT, STEPS_FLAP_TILT, true);
   delay(LID_HOLD_TIME_MS);
 
   // 3. Platform lowers back down to table
   rotateStepper(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
   delay(200);
 
-  // 4. Left flap returns to horizontal (CW)
-  rotateStepper(MOTOR_LEFT, STEPS_FLAP_TILT, true);
+  // 4. Left flap returns to horizontal (CCW)
+  rotateStepper(MOTOR_LEFT, STEPS_FLAP_TILT, false);
 
   digitalWrite(ledPins[1], LOW); // Green LED off
   for (int m = 0; m < 3; m++) deenergizeStepper(m);
