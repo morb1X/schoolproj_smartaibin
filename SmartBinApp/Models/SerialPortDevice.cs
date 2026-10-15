@@ -1,7 +1,7 @@
 namespace SmartBinApp.Models
 {
     /// <summary>
-    /// Информация о COM-порте и подключенном устройстве.
+    /// Information about a detected COM port and connected device.
     /// </summary>
     public class SerialPortDevice
     {

@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace SmartBinApp.ViewModels
 {
     /// <summary>
-    /// Базовый класс для ViewModel с реализацией INotifyPropertyChanged.
+    /// Base ViewModel class implementing INotifyPropertyChanged.
     /// </summary>
     public abstract class ViewModelBase : INotifyPropertyChanged
     {

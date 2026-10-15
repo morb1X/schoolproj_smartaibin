@@ -6,8 +6,8 @@ using SmartBinApp.ViewModels;
 namespace SmartBinApp
 {
     /// <summary>
-    /// Логика взаимодействия для MainWindow.xaml.
-    /// Главное окно приложения управления станцией AI Smart Bin.
+    /// Interaction logic for MainWindow.xaml.
+    /// Main control window for the AI Smart Bin station.
     /// </summary>
     public partial class MainWindow : Window
     {
@@ -17,17 +17,14 @@ namespace SmartBinApp
         {
             InitializeComponent();
 
-            // Создаем экземпляр главной ViewModel с инкапсулированными сервисами
             _viewModel = new MainViewModel();
             DataContext = _viewModel;
 
-            // Подписываемся на закрытие окна для корректного освобождения неуправляемых ресурсов (камера, COM-порт)
             Closing += OnMainWindowClosing;
         }
 
         /// <summary>
-        /// Обработчик события закрытия окна.
-        /// Гарантирует корректную остановку фонового потока захвата OpenCV и закрытие SerialPort.
+        /// Handles window closing event to gracefully release hardware and background tasks.
         /// </summary>
         private void OnMainWindowClosing(object? sender, CancelEventArgs e)
         {
@@ -37,7 +34,7 @@ namespace SmartBinApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка при закрытии ресурсов окна: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error disposing window resources: {ex.Message}");
             }
         }
     }

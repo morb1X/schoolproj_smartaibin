@@ -4,7 +4,7 @@ using System.Windows.Input;
 namespace SmartBinApp.ViewModels
 {
     /// <summary>
-    /// Стандартная реализация ICommand для привязки действий в WPF MVVM.
+    /// Standard ICommand implementation for WPF MVVM action bindings.
     /// </summary>
     public class RelayCommand : ICommand
     {

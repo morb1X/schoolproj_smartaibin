@@ -3,7 +3,7 @@ using System;
 namespace SmartBinApp.Models
 {
     /// <summary>
-    /// Уровень важности сообщения в журнале.
+    /// Log message severity level.
     /// </summary>
     public enum LogLevel
     {
@@ -14,7 +14,7 @@ namespace SmartBinApp.Models
     }
 
     /// <summary>
-    /// Модель записи в журнале событий приложения.
+    /// Telemetry and event log message record.
     /// </summary>
     public class LogMessage
     {

@@ -13,16 +13,31 @@ using SmartBinApp.Services;
 
 namespace SmartBinApp.ViewModels
 {
+    public class LanguageOption
+    {
+        public AppLanguage Language { get; set; }
+        public string DisplayName { get; set; }
+
+        public LanguageOption(AppLanguage language, string displayName)
+        {
+            Language = language;
+            DisplayName = displayName;
+        }
+
+        public override string ToString() => DisplayName;
+    }
+
     /// <summary>
-    /// Главная ViewModel приложения AI Smart Bin.
-    /// Связывает бизнес-логику работы с веб-камерой, нейросетью YOLOv8 (ONNX)
-    /// и микроконтроллером Arduino с пользовательским интерфейсом WPF.
+    /// Main ViewModel for AI Smart Bin.
+    /// Supports English and German localization with real-time UI switching.
+    /// Connects webcam, YOLOv8 ONNX inference, and Arduino UART serial communications.
     /// </summary>
     public class MainViewModel : ViewModelBase, IDisposable
     {
         private readonly ISerialManager _serialManager;
         private readonly ICameraService _cameraService;
         private readonly IWasteDetectorService _wasteDetector;
+        private readonly LocalizationService _loc = LocalizationService.Instance;
 
         private string? _selectedPort;
         private bool _isConnected;
@@ -30,30 +45,135 @@ namespace SmartBinApp.ViewModels
         private bool _isCameraRunning;
         private double _cameraFps;
         private BitmapSource? _currentFrame;
-        private string _statusMessage = "Готов к работе. Подключите Arduino (или включите Демо-режим) и запустите камеру.";
+        private string _statusMessage = "";
         private bool _isArduinoBusy;
         private CancellationTokenSource? _lidTimeoutCts;
         private bool _isDisposed;
         private CameraDeviceInfo? _selectedCamera;
 
-        // Поля состояния ИИ (YOLOv8)
+        // Neural network fields (YOLOv8)
         private bool _isModelLoaded;
-        private string _modelName = "Модель не загружена";
+        private string _modelName = "best.onnx";
         private ModelFileInfo? _selectedModel;
         private bool _isAutoModeEnabled = true;
         private double _confidenceThreshold = 0.40;
-        private string _lastDetectionText = "Ожидание объекта перед камерой...";
+        private string _lastDetectionText = "";
         private WasteType _lastDetectedCategory = WasteType.Unknown;
         private DateTime _lastAutoTriggerTime = DateTime.MinValue;
 
         private SerialPortDevice? _selectedPortDevice;
+        private LanguageOption _selectedLanguage;
 
         public ObservableCollection<SerialPortDevice> AvailablePorts { get; } = new();
         public ObservableCollection<CameraDeviceInfo> AvailableCameras { get; } = new();
         public ObservableCollection<ModelFileInfo> AvailableModels { get; } = new();
         public ObservableCollection<LogMessage> Logs { get; } = new();
+        public ObservableCollection<LanguageOption> AvailableLanguages { get; } = new();
 
-        #region Свойства подключения и камеры
+        #region Localization Properties
+
+        public LanguageOption SelectedLanguage
+        {
+            get => _selectedLanguage;
+            set
+            {
+                if (SetProperty(ref _selectedLanguage, value) && value != null)
+                {
+                    _loc.CurrentLanguage = value.Language;
+                }
+            }
+        }
+
+        public string WindowTitle => _loc.Get("WindowTitle");
+        public string HeaderTitle => _loc.Get("HeaderTitle");
+        public string HeaderSubtitle => _loc.Get("HeaderSubtitle");
+        public string VideoMonitorTitle => _loc.Get("VideoMonitorTitle");
+        public string CameraPlaceholderTitle => _loc.Get("CameraPlaceholderTitle");
+        public string CameraPlaceholderDesc => _loc.Get("CameraPlaceholderDesc");
+        public string CameraTooltip => _loc.Get("CameraTooltip");
+        public string SerialCardTitle => _loc.Get("SerialCardTitle");
+        public string SerialComboTooltip => _loc.Get("SerialComboTooltip");
+        public string RefreshPortsTooltip => _loc.Get("RefreshPortsTooltip");
+        public string AutoConnectBtn => _loc.Get("AutoConnectBtn");
+        public string AutoConnectTooltip => _loc.Get("AutoConnectTooltip");
+        public string ConnectBtn => _loc.Get("ConnectBtn");
+        public string DisconnectBtn => _loc.Get("DisconnectBtn");
+        public string DemoModeCheckbox => _loc.Get("DemoModeCheckbox");
+        public string DemoModeTooltip => _loc.Get("DemoModeTooltip");
+        public string AiModelCardTitle => _loc.Get("AiModelCardTitle");
+        public string ModelComboTooltip => _loc.Get("ModelComboTooltip");
+        public string BrowseModelBtn => _loc.Get("BrowseModelBtn");
+        public string BrowseModelTooltip => _loc.Get("BrowseModelTooltip");
+        public string AutoSortCheckbox => _loc.Get("AutoSortCheckbox");
+        public string ConfidenceThresholdLabel => string.Format(_loc.Get("ConfidenceThresholdLabel"), ConfidenceThresholdPercent);
+        public string CurrentDetectionLabel => _loc.Get("CurrentDetectionLabel");
+        public string ManualTestingCardTitle => _loc.Get("ManualTestingCardTitle");
+        public string ServoBusyText => _loc.Get("ServoBusyText");
+        public string BtnPlastic => _loc.Get("BtnPlastic");
+        public string BtnPaper => _loc.Get("BtnPaper");
+        public string BtnOrganic => _loc.Get("BtnOrganic");
+        public string EventLogCardTitle => _loc.Get("EventLogCardTitle");
+        public string ClearLogsBtn => _loc.Get("ClearLogsBtn");
+        public string StatusLabel => _loc.Get("StatusLabel");
+        public string FooterText => _loc.Get("FooterText");
+
+        private void OnLanguageChanged()
+        {
+            OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(HeaderTitle));
+            OnPropertyChanged(nameof(HeaderSubtitle));
+            OnPropertyChanged(nameof(VideoMonitorTitle));
+            OnPropertyChanged(nameof(CameraPlaceholderTitle));
+            OnPropertyChanged(nameof(CameraPlaceholderDesc));
+            OnPropertyChanged(nameof(CameraTooltip));
+            OnPropertyChanged(nameof(CameraToggleText));
+            OnPropertyChanged(nameof(CameraStatusText));
+            OnPropertyChanged(nameof(SerialCardTitle));
+            OnPropertyChanged(nameof(SerialComboTooltip));
+            OnPropertyChanged(nameof(RefreshPortsTooltip));
+            OnPropertyChanged(nameof(AutoConnectBtn));
+            OnPropertyChanged(nameof(AutoConnectTooltip));
+            OnPropertyChanged(nameof(ConnectBtn));
+            OnPropertyChanged(nameof(DisconnectBtn));
+            OnPropertyChanged(nameof(DemoModeCheckbox));
+            OnPropertyChanged(nameof(DemoModeTooltip));
+            OnPropertyChanged(nameof(AiModelCardTitle));
+            OnPropertyChanged(nameof(ModelComboTooltip));
+            OnPropertyChanged(nameof(BrowseModelBtn));
+            OnPropertyChanged(nameof(BrowseModelTooltip));
+            OnPropertyChanged(nameof(AutoSortCheckbox));
+            OnPropertyChanged(nameof(ConfidenceThresholdLabel));
+            OnPropertyChanged(nameof(CurrentDetectionLabel));
+            OnPropertyChanged(nameof(ManualTestingCardTitle));
+            OnPropertyChanged(nameof(ServoBusyText));
+            OnPropertyChanged(nameof(BtnPlastic));
+            OnPropertyChanged(nameof(BtnPaper));
+            OnPropertyChanged(nameof(BtnOrganic));
+            OnPropertyChanged(nameof(EventLogCardTitle));
+            OnPropertyChanged(nameof(ClearLogsBtn));
+            OnPropertyChanged(nameof(StatusLabel));
+            OnPropertyChanged(nameof(FooterText));
+            OnPropertyChanged(nameof(ArduinoStatusText));
+            OnPropertyChanged(nameof(ModelStatusBadge));
+
+            if (LastDetectedCategory == WasteType.Unknown)
+            {
+                LastDetectionText = _loc.Get("WaitingForObject");
+            }
+            else
+            {
+                LastDetectionText = _loc.GetWasteShortName(LastDetectedCategory);
+            }
+
+            if (string.IsNullOrEmpty(_statusMessage) || _statusMessage.Contains("Ready") || _statusMessage.Contains("Bereit"))
+            {
+                StatusMessage = _loc.Get("ReadyStatus");
+            }
+        }
+
+        #endregion
+
+        #region Connection and Camera Properties
 
         public SerialPortDevice? SelectedPortDevice
         {
@@ -114,10 +234,7 @@ namespace SmartBinApp.ViewModels
                     OnPropertyChanged(nameof(ArduinoStatusText));
                     OnPropertyChanged(nameof(ArduinoStatusBrush));
                     RaiseCommandsCanExecuteChanged();
-                    AddLog(value
-                        ? "[Демо-режим] Эмулятор Arduino ВКЛЮЧЕН. Вы можете тестировать сортировку без реальной платы."
-                        : "[Демо-режим] Эмулятор Arduino ВЫКЛЮЧЕН.",
-                        LogLevel.Info);
+                    AddLog(value ? _loc.Get("LogDemoEnabled") : _loc.Get("LogDemoDisabled"), LogLevel.Info);
                 }
             }
         }
@@ -126,9 +243,9 @@ namespace SmartBinApp.ViewModels
         {
             get
             {
-                if (IsConnected) return "Arduino: В сети";
-                if (IsDemoModeEnabled) return "Arduino: Демо (Эмулятор)";
-                return "Arduino: Отключен";
+                if (IsConnected) return _loc.Get("StatusArduinoOnline");
+                if (IsDemoModeEnabled) return _loc.Get("StatusArduinoDemo");
+                return _loc.Get("StatusArduinoOffline");
             }
         }
 
@@ -153,7 +270,7 @@ namespace SmartBinApp.ViewModels
                     {
                         _cameraService.Stop();
                         _cameraService.Start(value.Index);
-                        AddLog($"Переключение на камеру: {value.Name}", LogLevel.Info);
+                        AddLog(string.Format(_loc.Get("LogCameraSwitched"), value.Name), LogLevel.Info);
                     }
                 }
             }
@@ -167,6 +284,7 @@ namespace SmartBinApp.ViewModels
                 if (SetProperty(ref _isCameraRunning, value))
                 {
                     OnPropertyChanged(nameof(CameraToggleText));
+                    OnPropertyChanged(nameof(CameraStatusText));
                 }
             }
         }
@@ -204,11 +322,12 @@ namespace SmartBinApp.ViewModels
 
         public bool CanSendCommands => (IsConnected || IsDemoModeEnabled) && !IsArduinoBusy;
 
-        public string CameraToggleText => IsCameraRunning ? "Остановить камеру" : "Запустить камеру";
+        public string CameraToggleText => IsCameraRunning ? _loc.Get("CameraStop") : _loc.Get("CameraStart");
+        public string CameraStatusText => IsCameraRunning ? _loc.Get("CameraStatusLive") : _loc.Get("CameraStatusOff");
 
         #endregion
 
-        #region Свойства нейросети (ИИ)
+        #region Neural Network (AI) Properties
 
         public bool IsModelLoaded
         {
@@ -240,7 +359,9 @@ namespace SmartBinApp.ViewModels
             }
         }
 
-        public string ModelStatusBadge => IsModelLoaded ? $"✓ {ModelName}" : "✗ Модель не загружена";
+        public string ModelStatusBadge => IsModelLoaded
+            ? string.Format(_loc.Get("ModelStatusLoaded"), ModelName)
+            : _loc.Get("ModelStatusNone");
 
         public bool IsAutoModeEnabled
         {
@@ -249,10 +370,7 @@ namespace SmartBinApp.ViewModels
             {
                 if (SetProperty(ref _isAutoModeEnabled, value))
                 {
-                    AddLog(value
-                        ? "[Режим ИИ] Автоматическая сортировка ВКЛЮЧЕНА."
-                        : "[Режим ИИ] Автоматическая сортировка ВЫКЛЮЧЕНА (ручной режим).",
-                        LogLevel.Info);
+                    AddLog(value ? _loc.Get("LogAutoSortEnabled") : _loc.Get("LogAutoSortDisabled"), LogLevel.Info);
                 }
             }
         }
@@ -266,6 +384,7 @@ namespace SmartBinApp.ViewModels
                 {
                     _cameraService.ConfidenceThreshold = (float)value;
                     OnPropertyChanged(nameof(ConfidenceThresholdPercent));
+                    OnPropertyChanged(nameof(ConfidenceThresholdLabel));
                 }
             }
         }
@@ -286,7 +405,7 @@ namespace SmartBinApp.ViewModels
 
         #endregion
 
-        #region Команды
+        #region Commands
 
         public RelayCommand ConnectCommand { get; }
         public RelayCommand DisconnectCommand { get; }
@@ -307,58 +426,63 @@ namespace SmartBinApp.ViewModels
             _cameraService = cameraService ?? throw new ArgumentNullException(nameof(cameraService));
             _wasteDetector = wasteDetector ?? throw new ArgumentNullException(nameof(wasteDetector));
 
-            // Связываем детектор с сервисом захвата камеры
             _cameraService.Detector = _wasteDetector;
             _cameraService.ConfidenceThreshold = (float)_confidenceThreshold;
 
-            // Инициализация команд управления
+            // Language setup
+            AvailableLanguages.Add(new LanguageOption(AppLanguage.English, "🇬🇧 English"));
+            AvailableLanguages.Add(new LanguageOption(AppLanguage.German, "🇩🇪 Deutsch"));
+            _selectedLanguage = AvailableLanguages.First();
+            _loc.LanguageChanged += OnLanguageChanged;
+
+            _lastDetectionText = _loc.Get("WaitingForObject");
+            _statusMessage = _loc.Get("ReadyStatus");
+
+            // Commands
             ConnectCommand = new RelayCommand(ExecuteConnect, () => !IsConnected && !string.IsNullOrWhiteSpace(SelectedPort));
             DisconnectCommand = new RelayCommand(ExecuteDisconnect, () => IsConnected);
             AutoDetectAndConnectCommand = new RelayCommand(ExecuteAutoDetectAndConnect, () => !IsConnected);
             RefreshPortsCommand = new RelayCommand(ExecuteRefreshPorts);
             ToggleCameraCommand = new RelayCommand(ExecuteToggleCamera);
 
-            SimulatePlasticCommand = new RelayCommand(async () => await SendWasteCommandAsync('P', "Пластик"), () => CanSendCommands);
-            SimulatePaperCommand = new RelayCommand(async () => await SendWasteCommandAsync('B', "Бумага"), () => CanSendCommands);
-            SimulateOrganicCommand = new RelayCommand(async () => await SendWasteCommandAsync('O', "Органика"), () => CanSendCommands);
+            SimulatePlasticCommand = new RelayCommand(async () => await SendWasteCommandAsync('P', _loc.GetWasteShortName(WasteType.Plastic)), () => CanSendCommands);
+            SimulatePaperCommand = new RelayCommand(async () => await SendWasteCommandAsync('B', _loc.GetWasteShortName(WasteType.Paper)), () => CanSendCommands);
+            SimulateOrganicCommand = new RelayCommand(async () => await SendWasteCommandAsync('O', _loc.GetWasteShortName(WasteType.Organic)), () => CanSendCommands);
 
             ClearLogsCommand = new RelayCommand(() => Logs.Clear());
             LoadModelCommand = new RelayCommand(ExecuteLoadModel);
 
-            // Подписка на события SerialManager
+            // Serial Manager events
             _serialManager.ConnectionChanged += OnSerialConnectionChanged;
             _serialManager.CommandSent += OnSerialCommandSent;
             _serialManager.DataReceived += OnSerialDataReceived;
             _serialManager.ErrorOccurred += OnSerialError;
 
-            // Подписка на события CameraService
+            // Camera events
             _cameraService.StateChanged += OnCameraStateChanged;
             _cameraService.FrameReady += OnCameraFrameReady;
             _cameraService.DetectionsUpdated += OnCameraDetectionsUpdated;
             _cameraService.FpsUpdated += OnCameraFpsUpdated;
             _cameraService.ErrorOccurred += OnCameraError;
 
-            // Инициализация устройств видеозахвата
-            AvailableCameras.Add(new CameraDeviceInfo(0, "Камера #0 (Основная)"));
-            AvailableCameras.Add(new CameraDeviceInfo(1, "Камера #1 (Внешняя USB)"));
-            AvailableCameras.Add(new CameraDeviceInfo(2, "Камера #2"));
-            AvailableCameras.Add(new CameraDeviceInfo(3, "Камера #3"));
+            // Available cameras
+            AvailableCameras.Add(new CameraDeviceInfo(0, "Camera #0 (Primary)"));
+            AvailableCameras.Add(new CameraDeviceInfo(1, "Camera #1 (USB External)"));
+            AvailableCameras.Add(new CameraDeviceInfo(2, "Camera #2"));
+            AvailableCameras.Add(new CameraDeviceInfo(3, "Camera #3"));
             _selectedCamera = AvailableCameras.FirstOrDefault();
 
-            // Первоначальное сканирование COM-портов
             ExecuteRefreshPorts();
-
-            // Автоматический поиск best.onnx в каталоге приложения
             AutoDetectModelFile();
 
-            AddLog("Приложение AI Smart Bin инициализировано.", LogLevel.Info);
+            AddLog(_loc.Get("LogAppInitialized"), LogLevel.Info);
         }
 
         public MainViewModel() : this(new SerialManager(), new CameraService(), new YoloWasteDetector())
         {
         }
 
-        #region Логика нейросети и авто-сортировки
+        #region AI Logic & Auto-Sorting
 
         private void AutoDetectModelFile()
         {
@@ -373,12 +497,12 @@ namespace SmartBinApp.ViewModels
 
             if (File.Exists(classifierPath))
             {
-                AvailableModels.Add(new ModelFileInfo("♻️ WasteWise AI (Спец. мусор)", classifierPath, "Классификатор: пластик, бумага, органика, стекло, металл"));
+                AvailableModels.Add(new ModelFileInfo("♻️ Waste Classifier (ONNX)", classifierPath, _loc.Get("ModelClsDescription")));
             }
 
             if (File.Exists(bestPath))
             {
-                AvailableModels.Add(new ModelFileInfo("🎯 YOLOv8 Det (Детектор с рамками)", bestPath, "Детекция COCO: бутылки, посуда, бананы, яблоки"));
+                AvailableModels.Add(new ModelFileInfo("🎯 YOLOv8 Det (best.onnx)", bestPath, _loc.Get("ModelDetDescription")));
             }
 
             if (AvailableModels.Count > 0)
@@ -387,7 +511,7 @@ namespace SmartBinApp.ViewModels
             }
             else
             {
-                AddLog("Файлы моделей нейросети пока не найдены. Укажите файл через кнопку «Обзор...».", LogLevel.Warning);
+                AddLog(_loc.Get("LogNoModelsFound"), LogLevel.Warning);
             }
         }
 
@@ -395,14 +519,14 @@ namespace SmartBinApp.ViewModels
         {
             var dialog = new OpenFileDialog
             {
-                Title = "Выберите файл модели нейросети (ONNX)",
+                Title = "Select Neural Network Model (ONNX)",
                 Filter = "ONNX Model (*.onnx)|*.onnx|All files (*.*)|*.*",
                 InitialDirectory = AppDomain.CurrentDomain.BaseDirectory
             };
 
             if (dialog.ShowDialog() == true)
             {
-                var customModel = new ModelFileInfo(Path.GetFileName(dialog.FileName), dialog.FileName, "Пользовательская модель");
+                var customModel = new ModelFileInfo(Path.GetFileName(dialog.FileName), dialog.FileName, _loc.Get("CustomModelLabel"));
                 AvailableModels.Add(customModel);
                 SelectedModel = customModel;
             }
@@ -412,27 +536,27 @@ namespace SmartBinApp.ViewModels
         {
             try
             {
-                AddLog($"Загрузка модели нейросети: {Path.GetFileName(filePath)}...", LogLevel.Info);
+                AddLog(string.Format(_loc.Get("LogModelLoading"), Path.GetFileName(filePath)), LogLevel.Info);
                 bool success = _wasteDetector.LoadModel(filePath);
                 if (success)
                 {
                     IsModelLoaded = true;
                     ModelName = Path.GetFileName(filePath);
-                    AddLog($"Модель успешно инициализирована! Распознаваемые классы: {string.Join(", ", _wasteDetector.ClassNames)}", LogLevel.Success);
-                    StatusMessage = $"Модель YOLOv8 загружена ({ModelName})";
+                    AddLog(string.Format(_loc.Get("LogModelLoaded"), string.Join(", ", _wasteDetector.ClassNames)), LogLevel.Success);
+                    StatusMessage = $"YOLOv8 Model loaded ({ModelName})";
                 }
                 else
                 {
                     IsModelLoaded = false;
-                    ModelName = "Сбой загрузки";
-                    AddLog("Ошибка инициализации файла ONNX модели.", LogLevel.Error);
+                    ModelName = "Load error";
+                    AddLog(_loc.Get("LogModelLoadFailed"), LogLevel.Error);
                 }
             }
             catch (Exception ex)
             {
                 IsModelLoaded = false;
-                ModelName = "Ошибка";
-                AddLog($"Исключение при загрузке модели: {ex.Message}", LogLevel.Error);
+                ModelName = "Error";
+                AddLog($"Exception loading model: {ex.Message}", LogLevel.Error);
             }
         }
 
@@ -442,36 +566,33 @@ namespace SmartBinApp.ViewModels
             {
                 if (detections != null && detections.Count > 0)
                 {
-                    // Отбираем детекции, отдавая строгий приоритет известным типам мусора (не Unknown)
                     var wasteCandidates = detections.Where(d => d.Category != WasteType.Unknown).ToList();
                     var bestDetection = wasteCandidates.Count > 0
                         ? wasteCandidates.OrderByDescending(d => d.Confidence).First()
                         : detections.OrderByDescending(d => d.Confidence).First();
 
-                    LastDetectionText = $"{bestDetection.CategoryNameRu} ({bestDetection.Confidence * 100:F0}%)";
+                    LastDetectionText = $"{bestDetection.CategoryShortName} ({bestDetection.Confidence * 100:F0}%)";
                     LastDetectedCategory = bestDetection.Category;
 
-                    // Логика авто-сортировки
+                    // Auto-sort logic
                     if (IsAutoModeEnabled && CanSendCommands && bestDetection.ArduinoCommand.HasValue)
                     {
                         if (bestDetection.Confidence >= (float)ConfidenceThreshold)
                         {
-                            // Предохранительный кулдаун (не менее 6 секунд между сработками, чтобы мусор успел упасть)
                             if ((DateTime.Now - _lastAutoTriggerTime).TotalSeconds >= 6.0)
                             {
                                 _lastAutoTriggerTime = DateTime.Now;
-                                AddLog($"[Авто-ИИ] Зафиксирован объект: {bestDetection.CategoryNameRu} (уверенность {bestDetection.Confidence:P0} >= {ConfidenceThresholdPercent})", LogLevel.Success);
-                                _ = SendWasteCommandAsync(bestDetection.ArduinoCommand.Value, bestDetection.CategoryNameRu);
+                                AddLog(string.Format(_loc.Get("LogObjectDetected"), bestDetection.CategoryName, bestDetection.Confidence, ConfidenceThresholdPercent), LogLevel.Success);
+                                _ = SendWasteCommandAsync(bestDetection.ArduinoCommand.Value, bestDetection.CategoryShortName);
                             }
                         }
                     }
                 }
                 else
                 {
-                    // Если объект убран, через 1.5 секунды сбрасываем статус
                     if ((DateTime.Now - _lastAutoTriggerTime).TotalSeconds >= 1.5)
                     {
-                        LastDetectionText = "Ожидание объекта перед камерой...";
+                        LastDetectionText = _loc.Get("WaitingForObject");
                         LastDetectedCategory = WasteType.Unknown;
                     }
                 }
@@ -497,7 +618,7 @@ namespace SmartBinApp.ViewModels
             if (arduino != null)
             {
                 SelectedPortDevice = arduino;
-                AddLog($"[Авто-обнаружение] Найдена плата: {arduino.Description} ({arduino.PortName})", LogLevel.Success);
+                AddLog(string.Format(_loc.Get("LogBoardFound"), arduino.Description, arduino.PortName), LogLevel.Success);
             }
             else if (!string.IsNullOrEmpty(currentPort) && AvailablePorts.Any(p => p.PortName == currentPort))
             {
@@ -506,7 +627,7 @@ namespace SmartBinApp.ViewModels
             else
             {
                 SelectedPortDevice = AvailablePorts.FirstOrDefault();
-                AddLog($"Обнаружено COM-портов: {AvailablePorts.Count}", LogLevel.Info);
+                AddLog(string.Format(_loc.Get("LogPortsFound"), AvailablePorts.Count), LogLevel.Info);
             }
 
             RaiseCommandsCanExecuteChanged();
@@ -514,24 +635,24 @@ namespace SmartBinApp.ViewModels
 
         private void ExecuteAutoDetectAndConnect()
         {
-            AddLog("Авто-поиск и подключение платы Arduino...", LogLevel.Info);
+            AddLog(_loc.Get("LogAutoSearching"), LogLevel.Info);
             ExecuteRefreshPorts();
 
             var arduino = AvailablePorts.FirstOrDefault(d => d.IsArduino);
             if (arduino != null)
             {
                 SelectedPortDevice = arduino;
-                AddLog($"[Авто-подключение] Подключение к {arduino.Description} ({arduino.PortName})...", LogLevel.Info);
+                AddLog(string.Format(_loc.Get("LogAutoConnecting"), arduino.Description, arduino.PortName), LogLevel.Info);
                 ExecuteConnect();
             }
             else if (SelectedPortDevice != null)
             {
-                AddLog($"Arduino по имени не найден, подключаемся к выбранному порту {SelectedPortDevice.PortName}...", LogLevel.Warning);
+                AddLog(string.Format(_loc.Get("LogNoArduinoByName"), SelectedPortDevice.PortName), LogLevel.Warning);
                 ExecuteConnect();
             }
             else
             {
-                AddLog("Ошибка: COM-порты не найдены. Подключите Arduino кабелем USB.", LogLevel.Error);
+                AddLog(_loc.Get("LogNoPorts"), LogLevel.Error);
             }
         }
 
@@ -539,24 +660,24 @@ namespace SmartBinApp.ViewModels
         {
             if (string.IsNullOrWhiteSpace(SelectedPort))
             {
-                AddLog("Ошибка: COM-порт не выбран.", LogLevel.Warning);
+                AddLog(_loc.Get("LogNoPortSelected"), LogLevel.Warning);
                 return;
             }
 
-            AddLog($"Попытка подключения к {SelectedPort} на скорости 9600 бод...", LogLevel.Info);
+            AddLog(string.Format(_loc.Get("LogConnectingTo"), SelectedPort), LogLevel.Info);
             bool success = _serialManager.Open(SelectedPort, 9600);
             if (!success)
             {
-                StatusMessage = $"Не удалось подключиться к порту {SelectedPort}";
-                AddLog($"[Подсказка] Если порт {SelectedPort} заблокирован, закройте вкладку «Монитор порта» (Serial Monitor) в Arduino IDE.", LogLevel.Warning);
+                StatusMessage = $"Connection failed to {SelectedPort}";
+                AddLog(string.Format(_loc.Get("LogPortLockedHint"), SelectedPort), LogLevel.Warning);
             }
         }
 
         private void ExecuteDisconnect()
         {
             _serialManager.Close();
-            AddLog("Соединение с COM-портом разорвано пользователем.", LogLevel.Info);
-            StatusMessage = "COM-порт отключен";
+            AddLog(_loc.Get("LogDisconnectedByUser"), LogLevel.Info);
+            StatusMessage = "COM port disconnected";
         }
 
         private async Task SendWasteCommandAsync(char symbol, string wasteName)
@@ -567,28 +688,26 @@ namespace SmartBinApp.ViewModels
 
             if (IsConnected)
             {
-                StatusMessage = $"Отправка команды для: {wasteName} ('{symbol}')...";
-                AddLog($"[Команда] Запуск цикла сортировки: {wasteName} ('{symbol}')", LogLevel.Info);
+                StatusMessage = $"Sending command: {wasteName} ('{symbol}')...";
+                AddLog(string.Format(_loc.Get("LogSendingWasteCmd"), wasteName, symbol), LogLevel.Info);
 
                 bool sent = await _serialManager.SendCommandAsync(symbol);
                 if (sent)
                 {
-                    StatusMessage = $"Arduino открывает отсек '{wasteName}' (цикл ~5 сек)...";
-                    AddLog($"Команда '{symbol}' передана в контроллер. Ожидание завершения вращения мотора...", LogLevel.Success);
-
-                    // Запускаем предохранительный таймаут на случай, если ответ 'K' не вернется
+                    StatusMessage = $"Arduino opening '{wasteName}' compartment...";
+                    AddLog(string.Format(_loc.Get("LogCmdTransmitted"), symbol), LogLevel.Success);
                     StartLidSafetyTimeout();
                 }
                 else
                 {
                     IsArduinoBusy = false;
-                    StatusMessage = "Сбой отправки команды в Arduino.";
+                    StatusMessage = "Failed to send command to Arduino.";
                 }
             }
             else if (IsDemoModeEnabled)
             {
-                StatusMessage = $"[Демо-эмулятор] Открытие отсека '{wasteName}' (цикл ~2.5 сек)...";
-                AddLog($"[Демо-эмулятор] Эмуляция отправки байта '{symbol}' ({wasteName}). Сервопривод открывает люк...", LogLevel.Info);
+                StatusMessage = $"[Demo Emulator] Opening '{wasteName}' (~2.5 sec)...";
+                AddLog(string.Format(_loc.Get("LogDemoSimulation"), symbol, wasteName), LogLevel.Info);
 
                 _ = Task.Run(async () =>
                 {
@@ -598,8 +717,8 @@ namespace SmartBinApp.ViewModels
                         if (IsArduinoBusy)
                         {
                             IsArduinoBusy = false;
-                            StatusMessage = $"Готов к следующему объекту. Отсек '{wasteName}' закрыт.";
-                            AddLog($"[Демо-эмулятор] Получен виртуальный сигнал 'K': цикл мотора завершен, люк закрыт!", LogLevel.Success);
+                            StatusMessage = $"Ready. Compartment '{wasteName}' closed.";
+                            AddLog(_loc.Get("LogDemoSignalK"), LogLevel.Success);
                         }
                     });
                 });
@@ -616,8 +735,6 @@ namespace SmartBinApp.ViewModels
             {
                 try
                 {
-                    // Полный цикл Arduino (rotate 512 + delay 2000 + rotate 512) занимает ~5.1 сек
-                    // Даем 10 секунд с запасом на возврат символа 'K'
                     await Task.Delay(10000, token);
                     if (!token.IsCancellationRequested && IsArduinoBusy)
                     {
@@ -626,15 +743,14 @@ namespace SmartBinApp.ViewModels
                             if (IsArduinoBusy)
                             {
                                 IsArduinoBusy = false;
-                                StatusMessage = "Таймаут ответа от Arduino (контроллер разблокирован).";
-                                AddLog("Превышено время ожидания ответа 'K' от Arduino. Статус готовности сброшен.", LogLevel.Warning);
+                                StatusMessage = "Arduino response timeout (reset).";
+                                AddLog(_loc.Get("LogTimeoutWarning"), LogLevel.Warning);
                             }
                         });
                     }
                 }
                 catch (OperationCanceledException)
                 {
-                    // Ответ получен вовремя, таймаут штатно отменен
                 }
             }, token);
         }
@@ -647,17 +763,17 @@ namespace SmartBinApp.ViewModels
                 IsConnected = connected;
                 if (connected)
                 {
-                    StatusMessage = $"Подключено к Arduino ({_serialManager.CurrentPortName})";
-                    AddLog($"Успешное подключение к {_serialManager.CurrentPortName} (9600 бод).", LogLevel.Success);
+                    StatusMessage = $"Connected to Arduino ({_serialManager.CurrentPortName})";
+                    AddLog(string.Format(_loc.Get("LogConnectedSuccess"), _serialManager.CurrentPortName), LogLevel.Success);
                 }
                 else
                 {
                     IsArduinoBusy = false;
                     _lidTimeoutCts?.Cancel();
-                    StatusMessage = "Arduino отключен";
+                    StatusMessage = "Arduino disconnected";
                     if (wasConnected)
                     {
-                        AddLog("Порт закрыт.", LogLevel.Info);
+                        AddLog(_loc.Get("LogPortClosed"), LogLevel.Info);
                     }
                 }
             });
@@ -667,7 +783,7 @@ namespace SmartBinApp.ViewModels
         {
             Dispatch(() =>
             {
-                AddLog($"[TX -> Arduino] Отправлен байт: '{cmd}'", LogLevel.Info);
+                AddLog(string.Format(_loc.Get("LogByteSent"), cmd), LogLevel.Info);
             });
         }
 
@@ -675,16 +791,14 @@ namespace SmartBinApp.ViewModels
         {
             Dispatch(() =>
             {
-                AddLog($"[RX <- Arduino] Получено: \"{data.Trim()}\"", LogLevel.Info);
+                AddLog(string.Format(_loc.Get("LogDataReceived"), data.Trim()), LogLevel.Info);
 
-                // Согласно скетчу sketch_oct13a.ino:
-                // void openLid(int m) { ... Serial.println("K"); }
                 if (data.Contains('K'))
                 {
                     _lidTimeoutCts?.Cancel();
                     IsArduinoBusy = false;
-                    StatusMessage = "Готов к следующему объекту. Крышка закрыта.";
-                    AddLog("[Arduino] Получен сигнал 'K': цикл мотора завершен, крышка закрыта. Система готова к следующему предмету!", LogLevel.Success);
+                    StatusMessage = "Ready for next object. Lid closed.";
+                    AddLog(_loc.Get("LogSignalK"), LogLevel.Success);
                 }
             });
         }
@@ -693,7 +807,7 @@ namespace SmartBinApp.ViewModels
         {
             Dispatch(() =>
             {
-                AddLog($"[Ошибка порта] {error}", LogLevel.Error);
+                AddLog(string.Format(_loc.Get("LogPortError"), error), LogLevel.Error);
                 StatusMessage = error;
             });
         }
@@ -707,13 +821,13 @@ namespace SmartBinApp.ViewModels
             if (IsCameraRunning)
             {
                 _cameraService.Stop();
-                AddLog("Веб-камера остановлена пользователем.", LogLevel.Info);
+                AddLog(_loc.Get("LogCameraStopped"), LogLevel.Info);
             }
             else
             {
                 int camIndex = SelectedCamera?.Index ?? 0;
-                string camName = SelectedCamera?.Name ?? $"Камера #{camIndex}";
-                AddLog($"Инициализация захвата веб-камеры ({camName})...", LogLevel.Info);
+                string camName = SelectedCamera?.Name ?? $"Camera #{camIndex}";
+                AddLog($"Initializing webcam ({camName})...", LogLevel.Info);
                 _cameraService.Start(camIndex);
             }
         }
@@ -727,13 +841,13 @@ namespace SmartBinApp.ViewModels
                 {
                     CurrentFrame = null;
                     CameraFps = 0;
-                    StatusMessage = "Камера остановлена";
-                    LastDetectionText = "Камера не запущена";
+                    StatusMessage = "Camera stopped";
+                    LastDetectionText = _loc.Get("WaitingForObject");
                 }
                 else
                 {
-                    StatusMessage = "Видеопоток с камеры запущен";
-                    AddLog("Видеопоток камеры успешно запущен.", LogLevel.Success);
+                    StatusMessage = "Camera stream active";
+                    AddLog(_loc.Get("LogCameraStarted"), LogLevel.Success);
                 }
             });
         }
@@ -758,7 +872,7 @@ namespace SmartBinApp.ViewModels
         {
             Dispatch(() =>
             {
-                AddLog($"[Ошибка камеры] {error}", LogLevel.Error);
+                AddLog(string.Format(_loc.Get("LogCameraError"), error), LogLevel.Error);
                 StatusMessage = error;
             });
         }
@@ -805,6 +919,8 @@ namespace SmartBinApp.ViewModels
         {
             if (_isDisposed) return;
             _isDisposed = true;
+
+            _loc.LanguageChanged -= OnLanguageChanged;
 
             _lidTimeoutCts?.Cancel();
             _lidTimeoutCts?.Dispose();

@@ -1,54 +1,54 @@
-# 🔌 Схема подключения и руководство по прошивке Arduino
+# 🔌 Arduino Wiring & Firmware Guide
 
-Данная папка содержит готовый скетч микроконтроллера для проекта **AI Smart Bin**.
+This folder contains the complete firmware sketch for the **AI Smart Bin** microcontroller.
 
-## 📌 Поддерживаемые микроконтроллеры
-- **Arduino Uno R3 / R4**
-- **Arduino Nano (ATmega328P)**
-- **Arduino Mega 2560**
+## 📌 Supported Microcontrollers
+* **Arduino Uno R3 / R4**
+* **Arduino Nano (ATmega328P)**
+* **Arduino Mega 2560**
 
 ---
 
-## 🛠️ Вариант 1. Схема с 3 сервоприводами (Режим по умолчанию: `MODE_THREE_SERVOS`)
-Идеально подходит для классического бака с тремя независимыми люками:
+## 🛠️ Option 1: 3 Servos Setup (Default Mode: `MODE_THREE_SERVOS`)
+Ideal for a 3-compartment waste bin with separate lids:
 
-### Распиновка подключения к Arduino:
-| Сервопривод | Сигнальный провод (Оранжевый / Желтый) | Питание (Красный VCC) | Земля (Коричневый / Черный GND) |
+### Pinout Configuration:
+| Servo Compartment | Signal Wire (Orange / Yellow) | Power (Red VCC) | Ground (Brown / Black GND) |
 |---|:---:|:---:|:---:|
-| **Люк «Пластик»** | **Цифровой пин D9** | Внешние +5V | GND |
-| **Люк «Бумага»** | **Цифровой пин D10** | Внешние +5V | GND |
-| **Люк «Органика»** | **Цифровой пин D11** | Внешние +5V | GND |
+| **Plastic Lid** | **Digital Pin D9** | External +5V | GND |
+| **Paper Lid** | **Digital Pin D10** | External +5V | GND |
+| **Organic Lid** | **Digital Pin D11** | External +5V | GND |
 
-> ⚠️ **ВАЖНОЕ ПРАВИЛО ПИТАНИЯ СЕРВОПРИВОДОВ:**  
-> Три сервопривода SG90/MG995 во время движения могут потреблять пиковый ток до 1.5–2.0 Ампер.  
-> **Не питайте все сервоприводы напрямую от пина 5V Arduino!**  
-> Рекомендуется использовать внешний блок питания 5V (2А) или модуль питания макетной платы (MB102).  
-> **Обязательно соедините минус (GND) внешнего блока питания с пином GND платы Arduino!**
+> ⚠️ **CRITICAL POWER SUPPLY RULE:**  
+> Three SG90/MG995 servomotors during rotation can draw up to 1.5–2.0 Amperes of peak current.  
+> **Do NOT power all servos directly from the Arduino 5V pin!**  
+> Use an external regulated 5V (2A) power supply or breadboard power module (MB102).  
+> **Always connect the external power supply GND to the Arduino GND pin!**
 
 ---
 
-## ⚙️ Вариант 2. Схема с шаговым двигателем 28BYJ-48 (`MODE_STEPPER_MOTOR`)
-Подходит для конструкции с вращающейся каруселью или диском с отсеками:
+## ⚙️ Option 2: 28BYJ-48 Stepper Motor Setup (`MODE_STEPPER_MOTOR`)
+Suitable for carousel or rotating chute bin designs:
 
-### Подключение платы драйвера ULN2003:
-| Пин драйвера ULN2003 | Пин Arduino |
+### ULN2003 Driver Board Pinout:
+| ULN2003 Driver Pin | Arduino Pin |
 |---|:---:|
 | `IN1` | **D8** |
 | `IN2` | **D9** |
 | `IN3` | **D10** |
 | `IN4` | **D11** |
-| `+` (5V-12V) | +5V от внешнего БП |
-| `-` (GND) | GND Arduino и БП |
+| `+` (5V-12V) | +5V from external PSU |
+| `-` (GND) | Shared GND with Arduino & PSU |
 
 ---
 
-## 🚀 Пошаговая загрузка прошивки:
-1. Подключите Arduino к ПК по USB кабелю.
-2. Откройте скетч `SmartBin_Arduino.ino` в программе **Arduino IDE**.
-3. В меню **Инструменты (Tools)**:
-   - **Плата:** выберите *Arduino Uno* (или *Arduino Nano*).
-   - *Для Arduino Nano:* если не шьется, в меню **Процессор (Processor)** переключите на *ATmega328P (Old Bootloader)*.
-   - **Порт:** выберите определившийся COM-порт (например, `COM3` или `COM4`).
-4. Нажмите кнопку со стрелочкой **«Загрузить»** (`Ctrl + U`).
-5. После появления надписи *«Загрузка завершена»* закройте монитор порта в Arduino IDE (иначе он заблокирует порт для приложения C#).
-6. Запустите приложение **SmartBinApp**, выберите этот порт и нажмите **«Подключить»**!
+## 🚀 Firmware Upload Instructions:
+1. Connect your Arduino board to the PC via USB.
+2. Open `SmartBin_Arduino.ino` in **Arduino IDE**.
+3. In **Tools**:
+   - **Board:** Select *Arduino Uno* (or *Arduino Nano*).
+   - *For Arduino Nano:* If upload fails, switch **Processor** to *ATmega328P (Old Bootloader)*.
+   - **Port:** Select the detected COM port (e.g. `COM3` or `COM4`).
+4. Click **Upload** (`Ctrl + U`).
+5. Once uploaded, close the Serial Monitor in Arduino IDE (to allow the C# app to access the port).
+6. Open **SmartBinApp**, select the COM port and click **Connect**!

@@ -1,7 +1,7 @@
 namespace SmartBinApp.Models
 {
     /// <summary>
-    /// Модель описания устройства видеозахвата (веб-камеры).
+    /// Model representing a webcam capture device.
     /// </summary>
     public class CameraDeviceInfo
     {

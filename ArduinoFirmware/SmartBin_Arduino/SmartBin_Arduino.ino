@@ -1,18 +1,18 @@
 /*
  * =====================================================================================
- *  AI SMART BIN — ПРОШИВКА МИКРОКОНТРОЛЛЕРА ARDUINO
- *  Проект: Школьная умная станция раздельного сбора отходов с ИИ (YOLOv8)
+ *  AI SMART BIN — ARDUINO MICROCONTROLLER FIRMWARE
+ *  Project: Smart School Waste Sorting Station with AI (YOLOv8)
  * =====================================================================================
  * 
- *  ПРОТОКОЛ ОБМЕНА С ПК (UART 9600 бод):
- *  Команды от ПК (WPF C# приложение):
- *    'P' — Пластик (Plastic)
- *    'B' — Бумага / Картон (Paper / Box)
- *    'O' — Органика (Organic)
+ *  SERIAL PROTOCOL SPECIFICATION (UART 9600 BAUD):
+ *  Commands from PC (WPF C# Application):
+ *    'P' — Plastic
+ *    'B' — Paper & Cardboard
+ *    'O' — Organic / Bio-waste
  * 
- *  Ответы контроллера в ПК:
- *    "SMARTBIN_READY" — сигнал готовности при включении питания/перезагрузке
- *    'K'              — цикл открытия/закрытия отсека завершен, бак готов к следующему объекту
+ *  Responses to PC:
+ *    "SMARTBIN_READY" — Startup ready signal
+ *    'K'              — Actuation cycle complete, ready for next object
  * 
  * =====================================================================================
  */
@@ -20,27 +20,27 @@
 #include <Servo.h>
 
 // =====================================================================================
-// ВЫБОР РЕЖИМА РАБОТЫ МЕХАНИКИ (РАСКОММЕНТИРУЙТЕ НУЖНЫЙ РЕЖИМ):
+// SELECT ACTUATOR HARDWARE MODE (UNCOMMENT DESIRED MODE):
 // =====================================================================================
-#define MODE_THREE_SERVOS        // РЕЖИМ 1 (ПО УМОЛЧАНИЮ): 3 сервопривода (по 1 на каждый люк)
-//#define MODE_STEPPER_MOTOR     // РЕЖИМ 2: Шаговый двигатель 28BYJ-48 с драйвером ULN2003
-//#define MODE_SINGLE_SERVO_CHUTE // РЕЖИМ 3: Один сервопривод поворачивает распределительный лоток
+#define MODE_THREE_SERVOS        // MODE 1 (DEFAULT): 3 independent servo lids
+//#define MODE_STEPPER_MOTOR     // MODE 2: 28BYJ-48 Stepper motor with ULN2003 driver
+//#define MODE_SINGLE_SERVO_CHUTE // MODE 3: Single servo rotating distribution chute
 
 // =====================================================================================
-// КОНФИГУРАЦИЯ ПИНОВ И ПАРАМЕТРОВ
+// PIN CONFIGURATION & PARAMETERS
 // =====================================================================================
-const int LED_PIN = 13;          // Встроенный светодиод индикации активности
+const int LED_PIN = 13;          // Built-in activity LED
 
 #ifdef MODE_THREE_SERVOS
-  // Пины подключения сервоприводов SG90/MG995
-  const int SERVO_PIN_PLASTIC = 9;   // Сервопривод крышки «Пластик»
-  const int SERVO_PIN_PAPER   = 10;  // Сервопривод крышки «Бумага»
-  const int SERVO_PIN_ORGANIC = 11;  // Сервопривод крышки «Органика»
+  // Servo pins for SG90 / MG995
+  const int SERVO_PIN_PLASTIC = 9;   // Plastic lid servo
+  const int SERVO_PIN_PAPER   = 10;  // Paper lid servo
+  const int SERVO_PIN_ORGANIC = 11;  // Organic lid servo
 
-  // Углы открытия и закрытия крышек
-  const int ANGLE_CLOSED = 0;        // Угол закрытого люка (градусы)
-  const int ANGLE_OPENED = 95;       // Угол открытого люка (градусы)
-  const int LID_HOLD_TIME_MS = 2500; // Время удержания открытого люка (2.5 сек)
+  // Lid angles
+  const int ANGLE_CLOSED = 0;        // Closed position (degrees)
+  const int ANGLE_OPENED = 95;       // Open position (degrees)
+  const int LID_HOLD_TIME_MS = 2500; // Hold open duration (2.5 sec)
 
   Servo servoPlastic;
   Servo servoPaper;
@@ -48,33 +48,31 @@ const int LED_PIN = 13;          // Встроенный светодиод ин
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
-  // Пины подключения драйвера ULN2003 для шагового двигателя 28BYJ-48
+  // ULN2003 driver pins for 28BYJ-48
   const int STEPPER_IN1 = 8;
   const int STEPPER_IN2 = 9;
   const int STEPPER_IN3 = 10;
   const int STEPPER_IN4 = 11;
 
-  const int STEPS_PER_CYCLE = 512;   // Количество шагов (~90 градусов)
-  const int STEP_DELAY_US = 1500;    // Скорость вращения (микросекунды между шагами)
-  const int HOLD_TIME_MS = 2000;     // Пауза перед возвратом
+  const int STEPS_PER_CYCLE = 512;   // Steps count (~90 degrees)
+  const int STEP_DELAY_US = 1500;    // Step delay in microseconds
+  const int HOLD_TIME_MS = 2000;     // Pause duration
 #endif
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
-  const int CHUTE_SERVO_PIN = 9;     // Сервопривод распределительного желоба
-  const int ANGLE_CHUTE_PLASTIC = 30; // Наклон влево
-  const int ANGLE_CHUTE_PAPER   = 90; // По центру
-  const int ANGLE_CHUTE_ORGANIC = 150;// Наклон вправо
+  const int CHUTE_SERVO_PIN = 9;     // Chute servo pin
+  const int ANGLE_CHUTE_PLASTIC = 30; // Tilt left
+  const int ANGLE_CHUTE_PAPER   = 90; // Center
+  const int ANGLE_CHUTE_ORGANIC = 150;// Tilt right
   Servo servoChute;
 #endif
 
 // =====================================================================================
-// ИНИЦИАЛИЗАЦИЯ (SETUP)
+// SETUP
 // =====================================================================================
 void setup() {
-  // Инициализация последовательного порта на скорости 9600 бод (согласно C# SerialManager)
   Serial.begin(9600);
 
-  // Светодиод индикации
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
@@ -83,7 +81,6 @@ void setup() {
   servoPaper.attach(SERVO_PIN_PAPER);
   servoOrganic.attach(SERVO_PIN_ORGANIC);
 
-  // Установка исходного закрытого положения
   servoPlastic.write(ANGLE_CLOSED);
   servoPaper.write(ANGLE_CLOSED);
   servoOrganic.write(ANGLE_CLOSED);
@@ -99,29 +96,26 @@ void setup() {
 
 #ifdef MODE_SINGLE_SERVO_CHUTE
   servoChute.attach(CHUTE_SERVO_PIN);
-  servoChute.write(ANGLE_CHUTE_PAPER); // Исходное нейтральное положение
+  servoChute.write(ANGLE_CHUTE_PAPER);
 #endif
 
-  // Небольшая задержка для стабилизации питания сервоприводов
   delay(300);
 
-  // Отправляем сигнал готовности в приложение C# WPF
+  // Send ready signal to PC
   Serial.println(F("SMARTBIN_READY"));
 }
 
 // =====================================================================================
-// ОСНОВНОЙ ЦИКЛ (LOOP)
+// MAIN LOOP
 // =====================================================================================
 void loop() {
   if (Serial.available() > 0) {
     char cmd = Serial.read();
 
-    // Фильтруем символы перевода строки и пробелы
     if (cmd == '\r' || cmd == '\n' || cmd == ' ') {
       return;
     }
 
-    // Включаем светодиод на время обработки
     digitalWrite(LED_PIN, HIGH);
 
     switch (cmd) {
@@ -141,35 +135,31 @@ void loop() {
         break;
 
       default:
-        // Неизвестная команда — отправляем подтверждение, чтобы программа не зависла в ожидании
         break;
     }
 
-    // Выключаем светодиод
     digitalWrite(LED_PIN, LOW);
 
-    // КРИТИЧЕСКИ ВАЖНО: Отправляем символ 'K' в ПК!
-    // Получив этот байт, C# приложение сбрасывает флаг IsArduinoBusy и разрешает следующий предмет.
+    // CRITICAL: Send acknowledgement signal 'K' back to PC
     Serial.println('K');
   }
 }
 
 // =====================================================================================
-// ОБРАБОТЧИКИ ОТСЕКОВ ОТХОДОВ
+// COMPARTMENT HANDLERS
 // =====================================================================================
 
 void handleWastePlastic() {
 #ifdef MODE_THREE_SERVOS
-  // Открываем люк пластика, ждем и закрываем
   smoothMove(servoPlastic, ANGLE_CLOSED, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
   smoothMove(servoPlastic, ANGLE_OPENED, ANGLE_CLOSED, 15);
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
-  stepMotor(STEPS_PER_CYCLE, true); // Вперед
+  stepMotor(STEPS_PER_CYCLE, true);
   delay(HOLD_TIME_MS);
-  stepMotor(STEPS_PER_CYCLE, false); // Назад
+  stepMotor(STEPS_PER_CYCLE, false);
   stopStepper();
 #endif
 
@@ -182,7 +172,6 @@ void handleWastePlastic() {
 
 void handleWastePaper() {
 #ifdef MODE_THREE_SERVOS
-  // Открываем люк бумаги, ждем и закрываем
   smoothMove(servoPaper, ANGLE_CLOSED, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
   smoothMove(servoPaper, ANGLE_OPENED, ANGLE_CLOSED, 15);
@@ -198,12 +187,12 @@ void handleWastePaper() {
 #ifdef MODE_SINGLE_SERVO_CHUTE
   servoChute.write(ANGLE_CHUTE_PAPER);
   delay(LID_HOLD_TIME_MS);
+  servoChute.write(ANGLE_CHUTE_PAPER);
 #endif
 }
 
 void handleWasteOrganic() {
 #ifdef MODE_THREE_SERVOS
-  // Открываем люк органики, ждем и закрываем
   smoothMove(servoOrganic, ANGLE_CLOSED, ANGLE_OPENED, 15);
   delay(LID_HOLD_TIME_MS);
   smoothMove(servoOrganic, ANGLE_OPENED, ANGLE_CLOSED, 15);
@@ -224,11 +213,10 @@ void handleWasteOrganic() {
 }
 
 // =====================================================================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// HELPER FUNCTIONS
 // =====================================================================================
 
 #ifdef MODE_THREE_SERVOS
-// Плавное перемещение сервопривода (снижает нагрузку на редуктор и исключает удары)
 void smoothMove(Servo &s, int fromAngle, int toAngle, int stepDelayMs) {
   if (fromAngle < toAngle) {
     for (int pos = fromAngle; pos <= toAngle; pos += 2) {
@@ -245,7 +233,6 @@ void smoothMove(Servo &s, int fromAngle, int toAngle, int stepDelayMs) {
 #endif
 
 #ifdef MODE_STEPPER_MOTOR
-// Полношаговый алгоритм управления 28BYJ-48
 const uint8_t stepMatrix[4] = {
   0b0001,
   0b0010,

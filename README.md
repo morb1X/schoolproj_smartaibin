@@ -1,4 +1,9 @@
-# ♻️ AI Smart Bin — Умная станция раздельного сбора отходов
+# ♻️ AI Smart Bin — Autonomous Waste Sorting Station
+
+<p align="center">
+  <a href="README.md"><b>🇬🇧 English</b></a> •
+  <a href="README.de.md"><b>🇩🇪 Deutsch</b></a>
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 8" />
@@ -6,193 +11,203 @@
   <img src="https://img.shields.io/badge/YOLOv8-ONNX_Runtime-00599C?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX Runtime" />
   <img src="https://img.shields.io/badge/OpenCV-OpenCvSharp4-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white" alt="OpenCV" />
   <img src="https://img.shields.io/badge/Hardware-Arduino_Uno%2FNano-00979D?style=for-the-badge&logo=arduino&logoColor=white" alt="Arduino" />
+  <img src="https://img.shields.io/badge/Language-English_%7C_German-FFD700?style=for-the-badge" alt="Localization" />
   <img src="https://img.shields.io/github/license/morb1X/schoolproj_smartaibin?style=for-the-badge" alt="License" />
 </p>
 
 <p align="center">
-  <b>Аппаратно-программный комплекс с искусственным интеллектом для автоматизированной сортировки и раздельного сбора отходов.</b><br>
-  Разработан для школьных и студенческих экологических проектов, выставок и интерактивных демонстраций.
+  <b>An AI-powered hardware-software system for automated waste recognition, classification, and separate collection.</b><br>
+  Built for school and student science fairs, environmental exhibitions, and interactive demonstrations.
 </p>
 
 ---
 
-## 📌 Содержание
-- [🌟 Ключевые возможности](#-ключевые-возможности)
-- [🏗️ Архитектура системы](#️-архитектура-системы)
-- [🛠️ Технологический стек](#️-технологический-стек)
-- [📂 Структура репозитория](#-структура-репозитория)
-- [⚡ Быстрый старт](#-быстрый-старт)
-  - [1. Запуск приложения оператора (WPF)](#1-запуск-приложения-оператора-wpf)
-  - [2. Обучение модели YOLOv8 в Google Colab](#2-обучение-модели-yolov8-в-google-colab)
-  - [3. Прошивка контроллера Arduino](#3-прошивка-контроллера-arduino)
-- [🔌 Протокол взаимодействия (UART 9600)](#-протокол-взаимодействия-uart-9600)
-- [⚙️ Схема подключения электроники](#️-схема-подключения-электроники)
-- [🎮 Демо-режим (Эмулятор без стенда)](#-демо-режим-эмулятор-без-стенда)
-- [👥 Авторы и участие в проекте](#-авторы-и-участие-в-проекте)
+## 📌 Table of Contents
+- [🌟 Key Features](#-key-features)
+- [🌐 Multi-Language Support](#-multi-language-support)
+- [🏗️ System Architecture](#️-system-architecture)
+- [🛠️ Technology Stack](#️-technology-stack)
+- [📂 Repository Structure](#-repository-structure)
+- [⚡ Quick Start Guide](#-quick-start-guide)
+  - [1. Launching the Operator WPF Client](#1-launching-the-operator-wpf-client)
+  - [2. Training YOLOv8 in Google Colab](#2-training-yolov8-in-google-colab)
+  - [3. Uploading Firmware to Arduino](#3-uploading-firmware-to-arduino)
+- [🔌 Serial UART Communication Protocol](#-serial-uart-communication-protocol)
+- [⚙️ Hardware Wiring & Actuators](#️-hardware-wiring--actuators)
+- [🎮 Demo Emulator Mode (No Hardware Needed)](#-demo-emulator-mode-no-hardware-needed)
+- [👥 Authors & Contributing](#-authors--contributing)
 
 ---
 
-## 🌟 Ключевые возможности
+## 🌟 Key Features
 
-* 👁️ **Распознавание отходов в реальном времени:** захват видеопотока с веб-камеры и мгновенная детекция объектов с помощью нейросети **YOLOv8** (экспортированной в формат ONNX).
-* 🎯 **3 основные категории сортировки:**
-  * 🔵 **Пластик** (*Plastic*) — бутылки, пластиковые стаканчики, упаковка.
-  * 🟡 **Бумага и картон** (*Paper*) — листы, коробки, тетради.
-  * 🟢 **Органика** (*Organic*) — пищевые отходы, фрукты, кожура.
-* 🤖 **Аппаратная интеграция с Arduino:** автоматическое открытие нужного люка бака сервоприводами или поворот карусели шаговым двигателем.
-* 📊 **Современный UI в тёмной теме:** информативная панель оператора на WPF с отображением видео с цветными ограничивающими рамками (Bounding Boxes), бейджами статуса и журналом событий.
-* 🛡️ **Защита от ложных срабатываний:** настраиваемый порог уверенности (Confidence Threshold) и кулдаун (cooldown) между открытиями люков.
-* 🕹️ **Встроенный демо-режим:** возможность полноценного тестирования и демонстрации работы ИИ без подключённого физического стенда.
+* 👁️ **Real-time Waste Vision:** High-fps webcam video capture and instant item localization using **YOLOv8** running on **ONNX Runtime**.
+* 🎯 **3 Core Sorting Fractions:**
+  * 🔵 **Plastic** — bottles, cups, food packaging, wrappers, foil.
+  * 🟡 **Paper & Cardboard** — cartons, notebooks, newspapers, office paper.
+  * 🟢 **Organic / Bio-waste** — fruit peels, apple cores, food leftovers.
+* 🌐 **Full Multi-Language Support:** The operator desktop app supports **English** and **German** with instant in-app switching!
+* 🤖 **Autonomous Actuator Triggering:** Microcontroller automatically opens the designated compartment lid via servos or rotates a carousel using a stepper motor.
+* 🛡️ **Anti-Flicker & Safety Cooldown:** Configurable confidence threshold (20% to 95%) and a 6-second cooldown between trigger cycles to prevent redundant actuation.
+* 📊 **Modern Cyberpunk UI (WPF):** Dark mode theme with colored HUD bounding boxes, telemetry status badges, and event logs.
+* 🕹️ **Built-in Arduino Emulator:** Complete simulation of hardware signals (`'P'`, `'B'`, `'O'`, `'K'`) for presentations and testing without physical boards.
 
 ---
 
-## 🏗️ Архитектура системы
+## 🌐 Multi-Language Support
+
+The application includes real-time dynamic localization:
+* **🇬🇧 English** (Default)
+* **🇩🇪 Deutsch** (German)
+
+Switch languages at any time using the selector in the top-right corner of the application window. All titles, buttons, status badges, waste categories, and event logs update immediately.
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
 flowchart LR
-    A[📷 Веб-камера] -->|Видеопоток| B[🖥️ WPF Приложение C#]
-    B -->|Кадр 640x640| C[🧠 ONNX Runtime YOLOv8]
-    C -->|Класс + Вероятность| B
-    B -->|UART Команда 'P', 'B', 'O'| D[🔌 Arduino Uno / Nano]
-    D -->|Управляющий ШИМ| E[⚙️ Сервоприводы / Шаговый мотор]
-    E -->|Открытие люка| F[🗑️ Отсеки бака]
-    D -->|Ответ 'K' завершено| B
+    A[📷 Webcam Stream] -->|Frames 640x640| B[🖥️ WPF C# Client]
+    B -->|Tensor Input| C[🧠 ONNX Runtime YOLOv8]
+    C -->|Class + Confidence + Bounding Box| B
+    B -->|UART Command 'P', 'B', 'O'| D[🔌 Arduino Board]
+    D -->|PWM Signal| E[⚙️ Servos / Stepper Motor]
+    E -->|Open/Close Lid| F[🗑️ Waste Compartments]
+    D -->|Ack Signal 'K'| B
 ```
 
 ---
 
-## 🛠️ Технологический стек
+## 🛠️ Technology Stack
 
-| Компонент | Технологии | Описание |
+| Component | Technology | Role |
 |---|---|---|
-| **Клиент оператора** | C# .NET 8, WPF, XAML, MVVM | Графический интерфейс оператора с журналом событий и управлением периферией |
-| **Компьютерное зрение** | `OpenCvSharp4`, `OpenCvSharp4.WpfExtensions` | Захват видео с USB/встроенной камеры в отдельном фоновом потоке, отрисовка рамок |
-| **Инференс нейросети** | `Microsoft.ML.OnnxRuntime` | Высокопроизводительный запуск модели YOLOv8 на CPU/GPU |
-| **Обучение модели** | Python, Ultralytics YOLOv8, PyTorch | Обучение модели детекции мусора в облаке Google Colab |
-| **Связь с микроконтроллером** | `System.IO.Ports` (SerialPort) | Полнодуплексный асинхронный протокол по COM-порту (UART 9600 бод) |
-| **Микроконтроллер** | Arduino C++ (Uno / Nano / Mega) | Управление сервоприводами SG90/MG995 или шаговым двигателем 28BYJ-48 с ULN2003 |
+| **Operator GUI** | C# .NET 8, WPF, XAML, MVVM | Operator dashboard, real-time telemetry, settings, and controls |
+| **Computer Vision** | `OpenCvSharp4`, `OpenCvSharp4.WpfExtensions` | Low-latency camera capture on background thread and HUD rendering |
+| **Neural Network Inference** | `Microsoft.ML.OnnxRuntime` | Multi-threaded YOLOv8 execution on CPU |
+| **AI Training Pipeline** | Python, Ultralytics YOLOv8, PyTorch | Cloud GPU training in Google Colab |
+| **Serial Communication** | `System.IO.Ports` (SerialPort) | Full-duplex asynchronous UART communication (9600 baud, 8-N-1) |
+| **Hardware Controller** | Arduino Uno / Nano / Mega (C++) | Servo lid actuation (SG90/MG995) or stepper motor control (28BYJ-48) |
 
 ---
 
-## 📂 Структура репозитория
+## 📂 Repository Structure
 
 ```text
 schoolproj_smartaibin/
-├── README.md                           # Главное описание проекта
-├── PROJECT_INSTRUCTIONS.md             # Полное руководство, спецификации и журнал разработки
-├── ИНСТРУКЦИЯ_ОБУЧЕНИЯ_COLAB.md        # Пошаговая инструкция по обучению в Google Colab
-├── Train_SmartBin_YOLO.ipynb           # Jupyter-блокнот для обучения нейросети
-├── SmartBin.slnx                       # Файл решения (Solution) .NET 8
+├── README.md                           # Main English documentation
+├── README.de.md                        # German documentation
+├── COLAB_TRAINING_GUIDE.md             # Guide for training YOLOv8 in Google Colab
+├── PROJECT_DOCUMENTATION.md            # Technical specifications and developer reference
+├── Train_SmartBin_YOLO.ipynb           # Ready-to-run Jupyter training notebook
+├── SmartBin.slnx                       # .NET 8 Visual Studio / VS Code solution
 ├── ArduinoFirmware/
-│   ├── README.md                       # Схемы подключения и распиновка моторов
+│   ├── README.md                       # Electrical wiring schematics and pinout
 │   └── SmartBin_Arduino/
-│       └── SmartBin_Arduino.ino        # Исходный код прошивки микроконтроллера Arduino
-└── SmartBinApp/                        # Десктопное приложение оператора (WPF)
-    ├── SmartBinApp.csproj              # Проект C# .NET 8 WPF
-    ├── best.onnx                       # Обученная модель детекции YOLOv8
-    ├── Converters/                     # Конвертеры данных XAML
-    ├── Models/                         # Модели детекции, логов и устройств
-    ├── Services/                       # Сервисы камеры (OpenCV), ИИ (ONNX) и Serial UART
-    └── ViewModels/                     # Бизнес-логика интерфейса (MVVM)
+│       └── SmartBin_Arduino.ino        # Microcontroller firmware sketch
+└── SmartBinApp/                        # WPF C# Desktop Application
+    ├── SmartBinApp.csproj              # Project file (.NET 8 Windows)
+    ├── best.onnx                       # Pre-trained YOLOv8 ONNX model
+    ├── Converters/                     # XAML UI value converters
+    ├── Models/                         # Data models (DetectionResult, LogMessage, etc.)
+    ├── Services/                       # Localization, camera, detector, and serial services
+    └── ViewModels/                     # MVVM ViewModel logic
 ```
 
 ---
 
-## ⚡ Быстрый старт
+## ⚡ Quick Start Guide
 
-### 1. Запуск приложения оператора (WPF)
+### 1. Launching the Operator WPF Client
 
-#### Требования:
-* ОС: **Windows 10 / 11** (x64)
-* Установленный **[.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)**
-* Веб-камера (встроенная или внешняя USB)
+#### Prerequisites:
+* **Windows 10 / 11** (x64)
+* **[.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)**
+* Webcam (internal or USB)
 
-#### Запуск из терминала:
+#### Run via CLI:
 ```powershell
-# Перейдите в папку приложения
 cd SmartBinApp
-
-# Соберите и запустите проект
 dotnet build
 dotnet run
 ```
-*Или откройте `SmartBin.slnx` в **Visual Studio 2022** / **VS Code** и нажмите `F5`.*
+*Or open `SmartBin.slnx` in **Visual Studio 2022** / **VS Code** and press `F5`.*
 
 ---
 
-### 2. Обучение модели YOLOv8 в Google Colab
+### 2. Training YOLOv8 in Google Colab
 
-В репозитории уже есть готовая обученная модель [`SmartBinApp/best.onnx`](SmartBinApp/best.onnx), но при желании вы можете дообучить или обучить собственную модель:
+The repository includes a ready-to-use model [`SmartBinApp/best.onnx`](SmartBinApp/best.onnx). To train your own model:
+1. Open [Google Colab](https://colab.research.google.com/).
+2. Upload [`Train_SmartBin_YOLO.ipynb`](Train_SmartBin_YOLO.ipynb).
+3. Set runtime to **T4 GPU** (*Runtime ➔ Change runtime type*).
+4. Run all cells (`Ctrl + F9`).
+5. The trained `best.onnx` will download automatically upon completion (~10–12 minutes).
+6. Place `best.onnx` into `SmartBinApp/`.
 
-1. Откройте [Google Colab](https://colab.research.google.com/).
-2. Загрузите файл блокнота [`Train_SmartBin_YOLO.ipynb`](Train_SmartBin_YOLO.ipynb).
-3. В меню выберите: **Среда выполнения ➔ Сменить тип среды выполнения ➔ T4 GPU**.
-4. Нажмите **Среда выполнения ➔ Выполнить всё** (`Ctrl + F9`).
-5. После завершения обучения файл `best.onnx` автоматически скачается в браузер.
-6. Скопируйте `best.onnx` в папку `SmartBinApp/`.
-
-*Подробный разбор шагов смотрите в файле [ИНСТРУКЦИЯ_ОБУЧЕНИЯ_COLAB.md](ИНСТРУКЦИЯ_ОБУЧЕНИЯ_COLAB.md).*
-
----
-
-### 3. Прошивка контроллера Arduino
-
-1. Установите **[Arduino IDE](https://www.arduino.cc/en/software)**.
-2. Откройте файл скетча [`ArduinoFirmware/SmartBin_Arduino/SmartBin_Arduino.ino`](ArduinoFirmware/SmartBin_Arduino/SmartBin_Arduino.ino).
-3. Подключите плату **Arduino Uno** или **Nano** по USB.
-4. Выберите порт и плату в меню *Инструменты (Tools)*.
-5. Нажмите кнопку **«Загрузить» (Upload)** (`Ctrl + U`).
+*See the detailed guide in [COLAB_TRAINING_GUIDE.md](COLAB_TRAINING_GUIDE.md).*
 
 ---
 
-## 🔌 Протокол взаимодействия (UART 9600)
+### 3. Uploading Firmware to Arduino
 
-* **Параметры соединения:** `9600 baud`, `8-N-1`, `DTR/RTS = true`.
+1. Install **[Arduino IDE](https://www.arduino.cc/en/software)**.
+2. Open [`ArduinoFirmware/SmartBin_Arduino/SmartBin_Arduino.ino`](ArduinoFirmware/SmartBin_Arduino/SmartBin_Arduino.ino).
+3. Connect your **Arduino Uno** or **Nano** via USB.
+4. Select the board and COM port in *Tools*.
+5. Click **Upload** (`Ctrl + U`).
 
-### Команды от ПК к Arduino:
-| Байт (ASCII) | Назначение | Действие на стенде |
+---
+
+## 🔌 Serial UART Communication Protocol
+
+* **Parameters:** `9600 baud`, `8-N-1`, `DTR/RTS = true`.
+
+### PC ➔ Arduino:
+| Byte | Target Fraction | Action |
 |:---:|---|---|
-| `'P'` | **Пластик** (*Plastic*) | Открыть люк пластика на 3 сек, затем закрыть |
-| `'B'` | **Бумага** (*Paper*) | Открыть люк бумаги на 3 сек, затем закрыть |
-| `'O'` | **Органика** (*Organic*) | Открыть люк органики на 3 сек, затем закрыть |
+| `'P'` | **Plastic** | Opens plastic compartment lid for ~2.5 sec, then closes |
+| `'B'` | **Paper** | Opens paper compartment lid for ~2.5 sec, then closes |
+| `'O'` | **Organic** | Opens organic compartment lid for ~2.5 sec, then closes |
 
-### Ответы от Arduino к ПК:
-| Ответ | Событие | Значение для приложения |
+### Arduino ➔ PC:
+| Response | Trigger | Description |
 |:---:|---|---|
-| `SMARTBIN_READY\n` | Старт микроконтроллера | Arduino подтверждает готовность к работе |
-| `'K'` | Завершение движения люка | Механизм закрыт, система готова к следующему предмету |
+| `SMARTBIN_READY\n` | `setup()` boot | Notifies PC that microcontroller is initialized and ready |
+| `'K'` | Motor completion | Lid closed, hardware ready for the next item |
 
 ---
 
-## ⚙️ Схема подключения электроники
+## ⚙️ Hardware Wiring & Actuators
 
-### Вариант с 3 сервоприводами (по умолчанию):
-* **Сервопривод пластика:** Сигнал ➔ Пин **D9**
-* **Сервопривод бумаги:** Сигнал ➔ Пин **D10**
-* **Сервопривод органики:** Сигнал ➔ Пин **D11**
-* **Питание сервоприводов:** Внешний блок питания **+5V (2А)**, общая земля **GND** с платой Arduino.
+### 3-Servo Configuration (Default):
+* **Plastic Servo:** Signal ➔ Pin **D9**
+* **Paper Servo:** Signal ➔ Pin **D10**
+* **Organic Servo:** Signal ➔ Pin **D11**
+* **Power Supply:** External regulated **+5V (2A)** power supply. **Share GND with Arduino!**
 
-> ⚠️ *Внимание: Не питайте мощные сервоприводы напрямую от выхода 5V платы Arduino во избежание просадок напряжения и перезагрузки платы.*
+> ⚠️ *Important: Never power 3 servos directly from the Arduino 5V pin. Use external 5V power to prevent microcontroller brownouts.*
 
-*Схему для шагового двигателя 28BYJ-48 с драйвером ULN2003 смотрите в [ArduinoFirmware/README.md](ArduinoFirmware/README.md).*
-
----
-
-## 🎮 Демо-режим (Эмулятор без стенда)
-
-Если у вас под рукой нет физической платы Arduino:
-1. Запустите приложение **SmartBinApp**.
-2. В блоке подключения активируйте переключатель **«Демо-режим (эмулятор)»**.
-3. Нажмите **«Запустить камеру»** и включите **«Автоматическая сортировка»**.
-4. Показывайте предметы камере — приложение выполнит детекцию, сымитирует отправку команд и виртуальное открытие люков с записями в журнале событий!
+*For stepper motor wiring (28BYJ-48 with ULN2003 driver), see [ArduinoFirmware/README.md](ArduinoFirmware/README.md).*
 
 ---
 
-## 👥 Авторы и участие в проекте
+## 🎮 Demo Emulator Mode (No Hardware Needed)
 
-Проект разработан в рамках школьной исследовательской инициативы по экологии и искусственному интеллекту.
+You can run and test the complete system without an Arduino board:
+1. Start **SmartBinApp**.
+2. Check the **"Demo Mode (Arduino Emulator)"** box.
+3. Click **"Start Camera"** and enable **"Automatic Sorting"**.
+4. Hold items up to the camera — the AI will detect the category, simulate UART transmission, and log virtual servo movements!
 
-* **Автор проекта:** [@morb1X](https://github.com/morb1X)
-* Вопросы, предложения и баг-репорты приветствуются в разделе **[Issues](https://github.com/morb1X/schoolproj_smartaibin/issues)**!
+---
 
-⭐ Если проект вам понравился, не забудьте поставить звёздочку репозиторию!
+## 👥 Authors & Contributing
+
+Developed as part of a school research project on environmental AI applications.
+
+* **Project Author:** [@morb1X](https://github.com/morb1X)
+* Issues, feedback, and pull requests are welcome in **[Issues](https://github.com/morb1X/schoolproj_smartaibin/issues)**!
+
+⭐ If you find this project useful, please consider giving it a star!

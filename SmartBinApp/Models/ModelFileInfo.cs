@@ -1,7 +1,7 @@
 namespace SmartBinApp.Models
 {
     /// <summary>
-    /// Описание доступного файла нейросети ONNX для выбора в интерфейсе.
+    /// Metadata for ONNX neural network model file.
     /// </summary>
     public class ModelFileInfo
     {

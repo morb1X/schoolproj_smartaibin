@@ -1,10 +1,11 @@
 using System;
 using OpenCvSharp;
+using SmartBinApp.Services;
 
 namespace SmartBinApp.Models
 {
     /// <summary>
-    /// Категория отходов, поддерживаемая системой Smart Bin.
+    /// Waste category supported by the AI Smart Bin system.
     /// </summary>
     public enum WasteType
     {
@@ -15,37 +16,42 @@ namespace SmartBinApp.Models
     }
 
     /// <summary>
-    /// Результат распознавания объекта нейросетью YOLO.
+    /// Object detection result produced by the YOLO neural network.
     /// </summary>
     public class DetectionResult
     {
         /// <summary>
-        /// Исходное имя класса из датасета (например, "plastic", "paper", "cardboard", "banana").
+        /// Raw class name from the dataset (e.g. "plastic", "paper", "cardboard", "banana").
         /// </summary>
         public string RawClassName { get; }
 
         /// <summary>
-        /// Нормализованная категория мусора для нашего умного бака.
+        /// Normalized waste category for the Smart Bin.
         /// </summary>
         public WasteType Category { get; }
 
         /// <summary>
-        /// Название категории на русском языке.
+        /// Localized category display name (English or German).
         /// </summary>
-        public string CategoryNameRu { get; }
+        public string CategoryName => LocalizationService.Instance.GetWasteName(Category);
 
         /// <summary>
-        /// Уверенность нейросети от 0.0 до 1.0 (например, 0.94 = 94%).
+        /// Short localized category name.
+        /// </summary>
+        public string CategoryShortName => LocalizationService.Instance.GetWasteShortName(Category);
+
+        /// <summary>
+        /// Detection confidence score from 0.0 to 1.0 (e.g. 0.94 = 94%).
         /// </summary>
         public float Confidence { get; }
 
         /// <summary>
-        /// Прямоугольная область объекта в координатах исходного кадра.
+        /// Bounding box rectangle in frame coordinates.
         /// </summary>
         public Rect BoundingBox { get; }
 
         /// <summary>
-        /// Символ команды для отправки в микроконтроллер Arduino ('P', 'B', 'O' или null).
+        /// Hardware command character for Arduino UART ('P', 'B', 'O' or null).
         /// </summary>
         public char? ArduinoCommand { get; }
 
@@ -55,7 +61,6 @@ namespace SmartBinApp.Models
             Confidence = confidence;
             BoundingBox = boundingBox;
 
-            // Сопоставление распознанного класса с категориями умного бака
             string lower = rawClassName.ToLowerInvariant();
 
             if (lower.Contains("plastic") || lower.Contains("bottle") || lower.Contains("cup") ||
@@ -66,7 +71,6 @@ namespace SmartBinApp.Models
                 lower.Contains("glass") || lower.Contains("battery"))
             {
                 Category = WasteType.Plastic;
-                CategoryNameRu = "Пластик / Вторсырье";
                 ArduinoCommand = 'P';
             }
             else if (lower.Contains("paper") || lower.Contains("cardboard") || lower.Contains("box") ||
@@ -74,7 +78,6 @@ namespace SmartBinApp.Models
                      lower.Contains("book") || lower.Contains("tetra"))
             {
                 Category = WasteType.Paper;
-                CategoryNameRu = "Бумага";
                 ArduinoCommand = 'B';
             }
             else if (lower.Contains("organic") || lower.Contains("bio") || lower.Contains("biological") ||
@@ -85,17 +88,15 @@ namespace SmartBinApp.Models
                      lower.Contains("hot dog") || lower.Contains("broccoli") || lower.Contains("carrot"))
             {
                 Category = WasteType.Organic;
-                CategoryNameRu = "Органика (Био)";
                 ArduinoCommand = 'O';
             }
             else
             {
                 Category = WasteType.Unknown;
-                CategoryNameRu = rawClassName;
                 ArduinoCommand = null;
             }
         }
 
-        public string DisplayText => $"{CategoryNameRu} ({Confidence * 100:F0}%)";
+        public string DisplayText => $"{CategoryName} ({Confidence * 100:F0}%)";
     }
 }

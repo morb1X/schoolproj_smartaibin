@@ -12,9 +12,9 @@ using SmartBinApp.Models;
 namespace SmartBinApp.Services
 {
     /// <summary>
-    /// Сервис обнаружения и классификации мусора с использованием модели YOLOv8 (ONNX).
-    /// Поддерживает как модели детекции (YOLOv8-detect с bounding boxes),
-    /// так и классификационные модели (YOLOv8-cls) с автоматическим определением входного разрешения (224x224, 640x640 и т.д.).
+    /// Waste detection and classification service using YOLOv8 (ONNX).
+    /// Supports both object detection (YOLOv8-detect with bounding boxes)
+    /// and classification models (YOLOv8-cls) with dynamic input resolution detection.
     /// </summary>
     public class YoloWasteDetector : IWasteDetectorService
     {
@@ -53,10 +53,8 @@ namespace SmartBinApp.Services
                     _session = new InferenceSession(modelPath, sessionOptions);
                     ModelPath = modelPath;
 
-                    // Получаем имя входного слоя (обычно "images")
                     _inputName = _session.InputMetadata.Keys.FirstOrDefault() ?? "images";
 
-                    // Динамически определяем требуемое моделью разрешение тензора
                     if (_session.InputMetadata.TryGetValue(_inputName, out var inputMeta) && inputMeta.Dimensions.Length == 4)
                     {
                         InputHeight = inputMeta.Dimensions[2] > 0 ? inputMeta.Dimensions[2] : 640;
@@ -68,23 +66,21 @@ namespace SmartBinApp.Services
                         InputWidth = 640;
                     }
 
-                    // Проверяем формат выхода: [1, num_classes] (классификация) или [1, features, boxes] (детекция)
                     var outputMeta = _session.OutputMetadata.Values.FirstOrDefault();
                     IsClassificationModel = outputMeta != null && outputMeta.Dimensions.Length == 2;
 
-                    // Извлекаем имена классов из метаданных модели YOLO
                     ParseClassNamesFromMetadata();
 
-                    System.Diagnostics.Debug.WriteLine($"[YoloDetector] Модель загружена: {Path.GetFileName(modelPath)}, " +
-                                                      $"Вход: {InputWidth}x{InputHeight}, " +
-                                                      $"Тип: {(IsClassificationModel ? "Классификация (cls)" : "Детекция (detect)")}, " +
-                                                      $"Классов: {ClassNames.Count}");
+                    System.Diagnostics.Debug.WriteLine($"[YoloDetector] Model loaded: {Path.GetFileName(modelPath)}, " +
+                                                      $"Input: {InputWidth}x{InputHeight}, " +
+                                                      $"Type: {(IsClassificationModel ? "Classification (cls)" : "Detection (detect)")}, " +
+                                                      $"Classes: {ClassNames.Count}");
 
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[YoloDetector] Ошибка загрузки модели: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[YoloDetector] Model load error: {ex.Message}");
                     UnloadModelInternal();
                     return false;
                 }
@@ -116,7 +112,6 @@ namespace SmartBinApp.Services
                 var meta = _session.ModelMetadata.CustomMetadataMap;
                 if (meta.TryGetValue("names", out string? namesStr) && !string.IsNullOrWhiteSpace(namesStr))
                 {
-                    // Метаданные Ultralytics выглядят как: {0: 'plastic', 1: 'paper', 2: 'organic'}
                     var matches = Regex.Matches(namesStr, @"'([^']+)'|""([^""]+)""");
                     if (matches.Count > 0)
                     {
@@ -132,7 +127,7 @@ namespace SmartBinApp.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[YoloDetector] Предупреждение при чтении классов: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[YoloDetector] Warning reading class names: {ex.Message}");
             }
         }
 
@@ -152,12 +147,9 @@ namespace SmartBinApp.Services
                     int originalWidth = frame.Width;
                     int originalHeight = frame.Height;
 
-                    // ==========================================
-                    // РЕЖИМ 1: КЛАССИФИКАЦИОННАЯ МОДЕЛЬ (YOLOv8-cls)
-                    // ==========================================
+                    // MODE 1: CLASSIFICATION MODEL (YOLOv8-cls)
                     if (IsClassificationModel)
                     {
-                        // Анализируем как центральную область (куда человек подносит предмет), так и весь кадр
                         int cropSize = (int)(Math.Min(originalWidth, originalHeight) * 0.82);
                         int cropX = (originalWidth - cropSize) / 2;
                         int cropY = (originalHeight - cropSize) / 2;
@@ -185,9 +177,7 @@ namespace SmartBinApp.Services
                         return new List<DetectionResult>();
                     }
 
-                    // ==========================================
-                    // РЕЖИМ 2: МОДЕЛЬ ДЕТЕКЦИИ ОБЪЕКТОВ (YOLOv8-detect)
-                    // ==========================================
+                    // MODE 2: OBJECT DETECTION (YOLOv8-detect)
                     var tensor = CreateInputTensor(frame, InputWidth, InputHeight);
                     var inputs = new List<NamedOnnxValue>
                     {
@@ -233,7 +223,6 @@ namespace SmartBinApp.Services
                         {
                             string rawClassName = maxClassId < ClassNames.Count ? ClassNames[maxClassId] : $"class_{maxClassId}";
 
-                            // ИСКЛЮЧАЕМ человека и фоновые объекты интерьера
                             if (IsIgnoredClass(rawClassName))
                             {
                                 continue;
@@ -260,7 +249,7 @@ namespace SmartBinApp.Services
                         return new List<DetectionResult>();
                     }
 
-                    // Подавление немаксимумов (NMS)
+                    // Non-Maximum Suppression (NMS)
                     CvDnn.NMSBoxes(candidateBoxes, candidateScores, confidenceThreshold, 0.45f, out int[] indices);
 
                     var finalDetections = new List<DetectionResult>();
@@ -287,7 +276,7 @@ namespace SmartBinApp.Services
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[YoloDetector] Ошибка инференса: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[YoloDetector] Inference error: {ex.Message}");
                     return new List<DetectionResult>();
                 }
             }
@@ -324,7 +313,7 @@ namespace SmartBinApp.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[YoloDetector] Ошибка классификации фрагмента: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[YoloDetector] Classification error: {ex.Message}");
                 return (-1, 0f);
             }
         }
@@ -379,23 +368,20 @@ namespace SmartBinApp.Services
 
             foreach (var det in detections)
             {
-                // Фирменные цвета по категориям (BGR)
                 Scalar boxColor = det.Category switch
                 {
-                    WasteType.Plastic => new Scalar(248, 189, 56),  // Cyan / Голубой
-                    WasteType.Paper => new Scalar(11, 158, 245),    // Оранжево-янтарный
-                    WasteType.Organic => new Scalar(94, 197, 34),   // Изумрудно-зеленый
-                    _ => new Scalar(168, 85, 247)                   // Пурпурный
+                    WasteType.Plastic => new Scalar(248, 189, 56),  // Cyan
+                    WasteType.Paper => new Scalar(11, 158, 245),    // Amber
+                    WasteType.Organic => new Scalar(94, 197, 34),   // Green
+                    _ => new Scalar(168, 85, 247)                   // Purple
                 };
 
                 if (IsClassificationModel)
                 {
-                    // Футуристичная визирная сетка (уголки HUD) вокруг зоны сканирования
                     DrawHudCornerBrackets(frame, det.BoundingBox, boxColor, length: 30, thickness: 3);
 
-                    // Верхний стилизованный информационный баннер
                     string cmdText = det.ArduinoCommand.HasValue ? $"[CMD: '{det.ArduinoCommand}']" : "";
-                    string bannerText = $"AI: {det.CategoryNameRu.ToUpperInvariant()} - {det.Confidence * 100:F0}% {cmdText}";
+                    string bannerText = $"AI: {det.CategoryShortName.ToUpperInvariant()} - {det.Confidence * 100:F0}% {cmdText}";
 
                     var textSize = Cv2.GetTextSize(bannerText, HersheyFonts.HersheySimplex, 0.65, 2, out int baseline);
                     int bannerW = textSize.Width + 28;
@@ -403,7 +389,6 @@ namespace SmartBinApp.Services
                     int bannerX = Math.Max(12, (frame.Width - bannerW) / 2);
                     int bannerY = 12;
 
-                    // Подложка и рамка баннера
                     Cv2.Rectangle(frame, new Rect(bannerX, bannerY, bannerW, bannerH), new Scalar(15, 23, 42), -1);
                     Cv2.Rectangle(frame, new Rect(bannerX, bannerY, bannerW, bannerH), boxColor, 2, LineTypes.AntiAlias);
 
@@ -412,10 +397,9 @@ namespace SmartBinApp.Services
                 }
                 else
                 {
-                    // Отрисовка рамки вокруг найденного объекта (детекция)
                     Cv2.Rectangle(frame, det.BoundingBox, boxColor, 2, LineTypes.AntiAlias);
 
-                    string label = $"{det.CategoryNameRu} {det.Confidence * 100:F0}%";
+                    string label = $"{det.CategoryShortName} {det.Confidence * 100:F0}%";
                     var textSize = Cv2.GetTextSize(label, HersheyFonts.HersheySimplex, 0.6, 1, out int baseline);
 
                     int textY = Math.Max(det.BoundingBox.Y, textSize.Height + 8);
@@ -440,21 +424,17 @@ namespace SmartBinApp.Services
             int x2 = Math.Min(frame.Width - 1, box.X + box.Width);
             int y2 = Math.Min(frame.Height - 1, box.Y + box.Height);
 
-            // Верхний левый угол
             Cv2.Line(frame, new Point(x1, y1), new Point(x1 + length, y1), color, thickness);
             Cv2.Line(frame, new Point(x1, y1), new Point(x1, y1 + length), color, thickness);
 
-            // Верхний правый угол
             Cv2.Line(frame, new Point(x2, y1), new Point(x2 - length, y1), color, thickness);
             Cv2.Line(frame, new Point(x2, y1), new Point(x2, y1 + length), color, thickness);
 
-            // Нижний левый угол
             Cv2.Line(frame, new Point(x1, y2), new Point(x1 + length, y2), color, thickness);
             Cv2.Line(frame, new Point(x1, y2), new Point(x1, y2 - length), color, thickness);
 
-            // Нижний правый угол
             Cv2.Line(frame, new Point(x2, y2), new Point(x2 - length, y2), color, thickness);
-            Cv2.Line(frame, new Point(x2, y2), new Point(x2, y2 - length), color, thickness);
+            Cv2.Line(frame, new Point(x2, y2), new Point(x2 - length, y2), color, thickness);
         }
 
         public void Dispose()
