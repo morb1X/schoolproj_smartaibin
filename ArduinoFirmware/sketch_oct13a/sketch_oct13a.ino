@@ -47,21 +47,24 @@ const byte phases[8][4] = {
   {1, 0, 0, 1}
 };
 
-// ULN2003 Driver Pin Mapping with IN1, IN3, IN2, IN4 internal coil order:
+// ULN2003 Driver Pin Mapping (Sequential IN1, IN2, IN3, IN4):
 const int pins[3][4] = {
-  {8, 10, 9, 11},    // Motor 0: Table Platform Winch
-  {12, 14, 13, 15},  // Motor 1: Left Sorter Flap (Paper)
-  {16, 18, 17, 19}   // Motor 2: Right Sorter Flap (Bio)
+  {8, 9, 10, 11},    // Motor 0: Table Platform Winch (IN1=8, IN2=9, IN3=10, IN4=11)
+  {12, 13, 14, 15},  // Motor 1: Left Sorter Flap     (IN1=12, IN2=13, IN3=14, IN4=15)
+  {16, 17, 18, 19}   // Motor 2: Right Sorter Flap    (IN1=16, IN2=17, IN3=18, IN4=19)
 };
+
+// Motor direction toggle (Change to true/false to reverse Left Motor):
+const bool INVERT_LEFT_MOTOR = false; // Reversed left motor as requested
 
 // Indicator LEDs: Pin 5 = Red (Plastic), Pin 6 = Green (Paper), Pin 7 = Blue (Bio)
 const int ledPins[3] = {5, 6, 7};
 
 // Mechanical motion parameters (Half-step resolution: 4096 steps per 360 deg):
 const int STEPS_FLAP_TILT     = 760;   // ~67 degrees tilt for sorter flaps (60-75 deg range)
-const int STEPS_PLATFORM_LIFT = 1024;  // Thread winding steps to lift inspection platform
+const int STEPS_PLATFORM_LIFT = 2048;  // Thread winding steps to lift inspection platform (increased for more turns)
 const int CALIBRATION_STEPS   = 128;   // Steps per manual calibration nudge click (~11.2 deg)
-const int STEP_DELAY_US       = 1200;  // 1200 microseconds per half-step (smooth & high torque)
+const int STEP_DELAY_US       = 2000;  // 2000 microseconds per half-step (full torque & zero stall)
 const int LID_HOLD_TIME_MS    = 1800;  // Hold open duration for trash to fall through
 
 // Active calibration motor target: 0 = ALL, 1 = Platform, 2 = Left Flap, 3 = Right Flap
@@ -83,17 +86,18 @@ void deenergizeAll() {
 // Rotate a single stepper motor with 8-step half-stepping sequence and soft-start ramp
 void rotate(int m, int steps, bool forward) {
   if (m < 0 || m >= 3) return;
-  const int rampSteps = 24;
+  bool dir = (m == MOTOR_LEFT && INVERT_LEFT_MOTOR) ? !forward : forward;
+  const int rampSteps = 30;
   for (int s = 0; s < steps; s++) {
-    int p = forward ? (s % 8) : (7 - (s % 8));
+    int p = dir ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(pins[m][i], phases[p][i]);
     }
     int delayUs = STEP_DELAY_US;
     if (s < rampSteps && s < steps / 2) {
-      delayUs += (rampSteps - s) * 40; // Soft-start ramp: 2160 µs down to 1200 µs
+      delayUs += (rampSteps - s) * 35; // Soft-start ramp: 3050 µs down to 2000 µs
     } else if (s >= steps - rampSteps && steps > rampSteps * 2) {
-      delayUs += (s - (steps - rampSteps)) * 40; // Soft-stop ramp: 1200 µs up to 2160 µs
+      delayUs += (s - (steps - rampSteps)) * 35; // Soft-stop ramp: 2000 µs up to 3050 µs
     }
     delayMicroseconds(delayUs);
   }
@@ -103,19 +107,21 @@ void rotate(int m, int steps, bool forward) {
 // Rotate two stepper motors simultaneously (for opening/closing dual flaps together)
 void rotateTwo(int m1, bool fwd1, int m2, bool fwd2, int steps) {
   if (m1 < 0 || m1 >= 3 || m2 < 0 || m2 >= 3) return;
-  const int rampSteps = 24;
+  bool d1 = (m1 == MOTOR_LEFT && INVERT_LEFT_MOTOR) ? !fwd1 : fwd1;
+  bool d2 = (m2 == MOTOR_LEFT && INVERT_LEFT_MOTOR) ? !fwd2 : fwd2;
+  const int rampSteps = 30;
   for (int s = 0; s < steps; s++) {
-    int p1 = fwd1 ? (s % 8) : (7 - (s % 8));
-    int p2 = fwd2 ? (s % 8) : (7 - (s % 8));
+    int p1 = d1 ? (s % 8) : (7 - (s % 8));
+    int p2 = d2 ? (s % 8) : (7 - (s % 8));
     for (int i = 0; i < 4; i++) {
       digitalWrite(pins[m1][i], phases[p1][i]);
       digitalWrite(pins[m2][i], phases[p2][i]);
     }
     int delayUs = STEP_DELAY_US;
     if (s < rampSteps && s < steps / 2) {
-      delayUs += (rampSteps - s) * 40;
+      delayUs += (rampSteps - s) * 35;
     } else if (s >= steps - rampSteps && steps > rampSteps * 2) {
-      delayUs += (s - (steps - rampSteps)) * 40;
+      delayUs += (s - (steps - rampSteps)) * 35;
     }
     delayMicroseconds(delayUs);
   }
@@ -158,16 +164,16 @@ void handleWastePaper() {
   rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, true);
   delay(200);
 
-  // 2. Left flap tilts CW (left ramp into paper compartment)
-  rotate(MOTOR_LEFT, STEPS_FLAP_TILT, true);
+  // 2. Left flap tilts into paper compartment (inverted)
+  rotate(MOTOR_LEFT, STEPS_FLAP_TILT, false);
   delay(LID_HOLD_TIME_MS);
 
   // 3. Platform lowers back down to table
   rotate(MOTOR_PLATFORM, STEPS_PLATFORM_LIFT, false);
   delay(200);
 
-  // 4. Left flap returns to horizontal (CCW)
-  rotate(MOTOR_LEFT, STEPS_FLAP_TILT, false);
+  // 4. Left flap returns to horizontal (inverted)
+  rotate(MOTOR_LEFT, STEPS_FLAP_TILT, true);
 
   digitalWrite(ledPins[1], LOW); // Green LED off
   deenergizeAll();
